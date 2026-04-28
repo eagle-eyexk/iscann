@@ -123,6 +123,10 @@ components:
         url:
           type: string
           description: A fully qualified http(s) URL the user owns or has authorization to test.
+        enableActiveTests:
+          type: boolean
+          description: If true, perform ACTIVE tests (link crawling for injection candidates and sqlmap probing). Requires explicit owner authorization. Off by default.
+          default: false
       required:
         - url
     Severity:
@@ -334,6 +338,89 @@ components:
         - formsWithoutHttps
         - emailsFound
         - commentsLeaked
+    InjectionCandidate:
+      type: object
+      properties:
+        url:
+          type: string
+        method:
+          type: string
+          description: HTTP method (currently always GET).
+        params:
+          type: array
+          items:
+            type: string
+          description: Query parameter names that look interesting for injection testing.
+        kind:
+          type: string
+          description: Heuristic that flagged this URL (e.g. "php", "aspx", "id-param").
+      required:
+        - url
+        - method
+        - params
+        - kind
+    SqlmapResult:
+      type: object
+      properties:
+        url:
+          type: string
+        param:
+          type: string
+          nullable: true
+        vulnerable:
+          type: boolean
+        techniques:
+          type: array
+          items:
+            type: string
+          description: Detected injection technique tags (e.g. "boolean-based blind", "time-based blind").
+        dbms:
+          type: string
+          nullable: true
+          description: Database fingerprint reported by sqlmap, if any.
+        evidence:
+          type: string
+          nullable: true
+          description: Short snippet of relevant sqlmap output.
+        durationMs:
+          type: integer
+        error:
+          type: string
+          nullable: true
+          description: Reason the test could not complete, if any.
+      required:
+        - url
+        - vulnerable
+        - techniques
+        - durationMs
+    ActiveScanReport:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        crawledUrls:
+          type: integer
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/InjectionCandidate"
+        sqlmapResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/SqlmapResult"
+        sqlmapAvailable:
+          type: boolean
+        notes:
+          type: array
+          items:
+            type: string
+      required:
+        - enabled
+        - crawledUrls
+        - candidates
+        - sqlmapResults
+        - sqlmapAvailable
+        - notes
     RobotsInfo:
       type: object
       properties:
@@ -409,6 +496,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Finding"
+        active:
+          $ref: "#/components/schemas/ActiveScanReport"
         aiSummary:
           type: string
           description: AI-generated executive summary of the scan in plain language.
@@ -438,6 +527,7 @@ components:
         - content
         - robots
         - findings
+        - active
         - aiSummary
         - aiRemediation
     ScanSummary:

@@ -19,11 +19,19 @@ export const HealthCheckResponse = zod.object({
  * Performs only safe, passive checks (HTTP headers, TLS, DNS, cookies, exposed common files, tech fingerprinting, content checks). No exploits or aggressive payloads.
  * @summary Run a comprehensive ethical security scan against a public URL
  */
+export const runScanBodyEnableActiveTestsDefault = false;
+
 export const RunScanBody = zod.object({
   url: zod
     .string()
     .describe(
       "A fully qualified http(s) URL the user owns or has authorization to test.",
+    ),
+  enableActiveTests: zod
+    .boolean()
+    .default(runScanBodyEnableActiveTestsDefault)
+    .describe(
+      "If true, perform ACTIVE tests (link crawling for injection candidates and sqlmap probing). Requires explicit owner authorization. Off by default.",
     ),
 });
 
@@ -131,6 +139,53 @@ export const RunScanResponse = zod.object({
       recommendation: zod.string(),
     }),
   ),
+  active: zod.object({
+    enabled: zod.boolean(),
+    crawledUrls: zod.number(),
+    candidates: zod.array(
+      zod.object({
+        url: zod.string(),
+        method: zod.string().describe("HTTP method (currently always GET)."),
+        params: zod
+          .array(zod.string())
+          .describe(
+            "Query parameter names that look interesting for injection testing.",
+          ),
+        kind: zod
+          .string()
+          .describe(
+            'Heuristic that flagged this URL (e.g. \"php\", \"aspx\", \"id-param\").',
+          ),
+      }),
+    ),
+    sqlmapResults: zod.array(
+      zod.object({
+        url: zod.string(),
+        param: zod.string().nullish(),
+        vulnerable: zod.boolean(),
+        techniques: zod
+          .array(zod.string())
+          .describe(
+            'Detected injection technique tags (e.g. \"boolean-based blind\", \"time-based blind\").',
+          ),
+        dbms: zod
+          .string()
+          .nullish()
+          .describe("Database fingerprint reported by sqlmap, if any."),
+        evidence: zod
+          .string()
+          .nullish()
+          .describe("Short snippet of relevant sqlmap output."),
+        durationMs: zod.number(),
+        error: zod
+          .string()
+          .nullish()
+          .describe("Reason the test could not complete, if any."),
+      }),
+    ),
+    sqlmapAvailable: zod.boolean(),
+    notes: zod.array(zod.string()),
+  }),
   aiSummary: zod
     .string()
     .describe("AI-generated executive summary of the scan in plain language."),
@@ -296,6 +351,53 @@ export const GetScanResponse = zod.object({
       recommendation: zod.string(),
     }),
   ),
+  active: zod.object({
+    enabled: zod.boolean(),
+    crawledUrls: zod.number(),
+    candidates: zod.array(
+      zod.object({
+        url: zod.string(),
+        method: zod.string().describe("HTTP method (currently always GET)."),
+        params: zod
+          .array(zod.string())
+          .describe(
+            "Query parameter names that look interesting for injection testing.",
+          ),
+        kind: zod
+          .string()
+          .describe(
+            'Heuristic that flagged this URL (e.g. \"php\", \"aspx\", \"id-param\").',
+          ),
+      }),
+    ),
+    sqlmapResults: zod.array(
+      zod.object({
+        url: zod.string(),
+        param: zod.string().nullish(),
+        vulnerable: zod.boolean(),
+        techniques: zod
+          .array(zod.string())
+          .describe(
+            'Detected injection technique tags (e.g. \"boolean-based blind\", \"time-based blind\").',
+          ),
+        dbms: zod
+          .string()
+          .nullish()
+          .describe("Database fingerprint reported by sqlmap, if any."),
+        evidence: zod
+          .string()
+          .nullish()
+          .describe("Short snippet of relevant sqlmap output."),
+        durationMs: zod.number(),
+        error: zod
+          .string()
+          .nullish()
+          .describe("Reason the test could not complete, if any."),
+      }),
+    ),
+    sqlmapAvailable: zod.boolean(),
+    notes: zod.array(zod.string()),
+  }),
   aiSummary: zod
     .string()
     .describe("AI-generated executive summary of the scan in plain language."),

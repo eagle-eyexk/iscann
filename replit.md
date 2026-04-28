@@ -26,9 +26,18 @@ Ethical AI-powered website security analyzer. Users submit a URL they own; backe
 - `dns.ts` — A/AAAA/MX/NS/TXT/CAA + SPF/DMARC presence via `node:dns` + `psl` for apex.
 - `exposed.ts` — probes a curated list of sensitive paths (.env, .git, etc.).
 - `content.ts` — HTML inspection (mixed content, comments, emails) + tech fingerprinting + robots.txt.
+- `crawler.ts` — one-level same-host BFS crawler that gathers `.php?id=`/`.aspx?…=`/interesting-param URLs and GET forms. Caps: 8 pages, 12 candidates.
+- `sqlmap.ts` — locates `sqlmap` binary, runs it against candidates with `--batch --level=1 --risk=1 --random-agent --technique=BEUS`, parses stdout + log dir for vulnerable params/DBMS/techniques. Caps: 4 targets, 90s/target.
 - `scoring.ts` — severity-weighted score → letter grade.
 - `ai.ts` — Anthropic Sonnet 4.6 generates exec summary + prioritized remediation. Falls back gracefully if the AI call fails.
-- `index.ts` — orchestrator: normalizes URL, blocks private hosts, runs all checks (parallel where safe), composes ScanReport.
+- `index.ts` — orchestrator: normalizes URL, blocks private hosts, runs all checks (parallel where safe), composes ScanReport. Active testing (crawler + sqlmap) runs only when `enableActiveTests: true` is in the request body and adds an `active` block to the report.
+
+## Active testing
+
+- Off by default. UI requires two checkboxes (enable + authorization confirmation) before sending `enableActiveTests: true`.
+- sqlmap binary lives at `.pythonlibs/bin/sqlmap` (installed via the `python311` module + pip).
+- Detected SQLi findings are emitted as `critical` severity in the standard findings list and as a structured `active.sqlmapResults` table on the report page.
+- Stored reports use `active` inside the JSONB `report` column — no DB migration was needed. `GET /api/scan/:id` back-fills a default `active` block for older rows.
 
 ## DB schema
 
@@ -47,5 +56,6 @@ Ethical AI-powered website security analyzer. Users submit a URL they own; backe
 ## Ethical guardrails
 
 - UI prominently displays: "Only scan properties you have permission to test."
-- All checks are passive (no exploits, no auth probing, no aggressive payloads).
+- Default mode is passive only (no exploits, no auth probing, no aggressive payloads).
+- Active mode (link crawl + sqlmap) is opt-in, double-confirmed in the UI, and runs sqlmap at the lowest intensity (level 1, risk 1, GET-only, BEUS techniques, single thread).
 - Refuses to scan localhost / RFC1918 / link-local hosts.

@@ -35,7 +35,9 @@ router.post("/scan", async (req, res): Promise<void> => {
   let report: ScanReport;
   let counts;
   try {
-    const result = await runScanFor(normalized);
+    const result = await runScanFor(normalized, {
+      enableActiveTests: parsed.data.enableActiveTests === true,
+    });
     counts = result._counts;
     const { _counts, ...rest } = result;
     report = rest;
@@ -209,9 +211,17 @@ router.get("/scan/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const stored = row.report as ScanReport;
+  const stored = row.report as Partial<ScanReport>;
   const result: ScanReport = {
-    ...stored,
+    ...(stored as ScanReport),
+    active: stored.active ?? {
+      enabled: false,
+      crawledUrls: 0,
+      candidates: [],
+      sqlmapResults: [],
+      sqlmapAvailable: false,
+      notes: [],
+    },
     id: row.id,
     scannedAt: row.scannedAt,
   };

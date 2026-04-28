@@ -1,4 +1,3 @@
-import psl from "psl";
 import { fetchSite } from "./fetch";
 import { analyzeHeaders } from "./headers";
 import { analyzeCookies, parseSetCookies } from "./cookies";
@@ -8,8 +7,10 @@ import { probeExposedFiles } from "./exposed";
 import { analyzeContent, fingerprintTech, checkRobots } from "./content";
 import { scoreFindings } from "./scoring";
 import { summarizeScanWithAi } from "./ai";
+import { crawlForCandidates } from "./crawler";
+import { runSqlmapBatch, locateSqlmap } from "./sqlmap";
 import type { Finding } from "./types";
-import type { ScanReport } from "@workspace/api-zod";
+import type { ScanReport, ActiveScanReport } from "@workspace/api-zod";
 
 export function normalizeUrl(input: string): string {
   let s = input.trim();
@@ -40,7 +41,10 @@ export function isPublicHost(host: string): boolean {
   return true;
 }
 
-export async function runScanFor(url: string): Promise<ScanReport & { _counts: ReturnType<typeof import("./scoring").countSeverities> }> {
+export async function runScanFor(
+  url: string,
+  options: { enableActiveTests?: boolean } = {},
+): Promise<ScanReport & { _counts: ReturnType<typeof import("./scoring").countSeverities> }> {
   const startedAt = Date.now();
   const normalized = normalizeUrl(url);
   const u = new URL(normalized);
@@ -84,6 +88,39 @@ export async function runScanFor(url: string): Promise<ScanReport & { _counts: R
   const tech = fingerprintTech(fetched.body, fetched.rawHeaders);
   findings.push(...contentFindings);
 
+  // Step 9 (optional): active testing — link gathering + sqlmap
+  const active: ActiveScanReport = {
+    enabled: !!options.enableActiveTests,
+    crawledUrls: 0,
+    candidates: [],
+    sqlmapResults: [],
+    sqlmapAvailable: locateSqlmap() != null,
+    notes: [],
+  };
+  if (options.enableActiveTests) {
+    try {
+      const { crawledUrls, candidates } = await crawlForCandidates(finalUrl);
+      active.crawledUrls = crawledUrls;
+      active.candidates = candidates;
+      if (candidates.length === 0) {
+        active.notes.push("No URLs with query parameters were discovered while crawling.");
+      } else {
+        const sqlmap = await runSqlmapBatch(candidates);
+        active.sqlmapResults = sqlmap.results;
+        active.sqlmapAvailable = sqlmap.available;
+        active.notes.push(...sqlmap.notes);
+        findings.push(...sqlmap.findings);
+        if (!sqlmap.available) {
+          active.notes.push(
+            "sqlmap is not available on this server, so candidate URLs were collected but not actively tested.",
+          );
+        }
+      }
+    } catch (err) {
+      active.notes.push(`Active scan failed: ${(err as Error).message}`);
+    }
+  }
+
   // Score
   const { score, grade } = scoreFindings(findings);
 
@@ -120,6 +157,7 @@ export async function runScanFor(url: string): Promise<ScanReport & { _counts: R
     content,
     robots: robotsRes.robots,
     findings: dedupeAndSort(findings),
+    active,
     aiSummary: ai.summary,
     aiRemediation: ai.remediation,
   };
@@ -139,5 +177,3 @@ function dedupeAndSort(findings: Finding[]): Finding[] {
   return unique.sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
 }
 
-// Re-export for convenience
-export { default as psl } from "psl";

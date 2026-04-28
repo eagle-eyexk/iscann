@@ -9,4 +9,6 @@
 export interface ScanRequest {
   /** A fully qualified http(s) URL the user owns or has authorization to test. */
   url: string;
+  /** If true, perform ACTIVE tests (link crawling for injection candidates and sqlmap probing). Requires explicit owner authorization. Off by default. */
+  enableActiveTests?: boolean;
 }

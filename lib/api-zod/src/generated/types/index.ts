@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./activeScanReport";
 export * from "./apiError";
 export * from "./contentChecks";
 export * from "./cookieInfo";
@@ -14,6 +15,7 @@ export * from "./exposedFile";
 export * from "./finding";
 export * from "./headerCheck";
 export * from "./healthStatus";
+export * from "./injectionCandidate";
 export * from "./robotsInfo";
 export * from "./scanReport";
 export * from "./scanReportRawHeaders";
@@ -24,5 +26,6 @@ export * from "./scanStatsRecentSeverityCounts";
 export * from "./scanStatsTopIssuesItem";
 export * from "./scanSummary";
 export * from "./severity";
+export * from "./sqlmapResult";
 export * from "./techFingerprint";
 export * from "./tlsInfo";

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ActiveScanReport } from "./activeScanReport";
 import type { ContentChecks } from "./contentChecks";
 import type { CookieInfo } from "./cookieInfo";
 import type { DnsInfo } from "./dnsInfo";
@@ -39,6 +40,7 @@ export interface ScanReport {
   content: ContentChecks;
   robots: RobotsInfo;
   findings: Finding[];
+  active: ActiveScanReport;
   /** AI-generated executive summary of the scan in plain language. */
   aiSummary: string;
   /** AI-generated prioritized remediation steps. */

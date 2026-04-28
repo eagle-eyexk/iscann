@@ -41,7 +41,7 @@ function App() {
                 </a>
                 <div className="text-xs text-muted-foreground bg-muted/40 px-2.5 py-1 rounded-full border border-border/50 hidden sm:flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                  Safe passive checks only
+                  Passive by default · Opt-in active probes
                 </div>
               </div>
             </header>
@@ -52,7 +52,7 @@ function App() {
               <div className="container max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <p>Ethical Web Security Analyzer</p>
                 <p className="max-w-md text-xs opacity-70">
-                  Only scan sites you own or have explicit permission to test. This tool runs only safe, passive checks — no exploits or aggressive payloads.
+                  Only scan sites you own or have explicit permission to test. Passive checks run by default; active SQL-injection probing (sqlmap) is opt-in and requires explicit authorization.
                 </p>
               </div>
             </footer>

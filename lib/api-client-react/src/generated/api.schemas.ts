@@ -16,6 +16,8 @@ export interface ApiError {
 export interface ScanRequest {
   /** A fully qualified http(s) URL the user owns or has authorization to test. */
   url: string;
+  /** If true, perform ACTIVE tests (link crawling for injection candidates and sqlmap probing). Requires explicit owner authorization. Off by default. */
+  enableActiveTests?: boolean;
 }
 
 export type Severity = (typeof Severity)[keyof typeof Severity];
@@ -105,6 +107,40 @@ export interface ContentChecks {
   commentsLeaked: number;
 }
 
+export interface InjectionCandidate {
+  url: string;
+  /** HTTP method (currently always GET). */
+  method: string;
+  /** Query parameter names that look interesting for injection testing. */
+  params: string[];
+  /** Heuristic that flagged this URL (e.g. "php", "aspx", "id-param"). */
+  kind: string;
+}
+
+export interface SqlmapResult {
+  url: string;
+  param?: string | null;
+  vulnerable: boolean;
+  /** Detected injection technique tags (e.g. "boolean-based blind", "time-based blind"). */
+  techniques: string[];
+  /** Database fingerprint reported by sqlmap, if any. */
+  dbms?: string | null;
+  /** Short snippet of relevant sqlmap output. */
+  evidence?: string | null;
+  durationMs: number;
+  /** Reason the test could not complete, if any. */
+  error?: string | null;
+}
+
+export interface ActiveScanReport {
+  enabled: boolean;
+  crawledUrls: number;
+  candidates: InjectionCandidate[];
+  sqlmapResults: SqlmapResult[];
+  sqlmapAvailable: boolean;
+  notes: string[];
+}
+
 export interface RobotsInfo {
   present: boolean;
   sensitiveDisallows: string[];
@@ -136,6 +172,7 @@ export interface ScanReport {
   content: ContentChecks;
   robots: RobotsInfo;
   findings: Finding[];
+  active: ActiveScanReport;
   /** AI-generated executive summary of the scan in plain language. */
   aiSummary: string;
   /** AI-generated prioritized remediation steps. */

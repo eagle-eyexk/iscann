@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Shield, ShieldAlert, Activity, Globe, Lock, Search, ChevronRight, AlertTriangle } from "lucide-react";
+import { Shield, ShieldAlert, Activity, Globe, Lock, Search, ChevronRight, AlertTriangle, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   useRunScan, 
@@ -32,6 +32,8 @@ const scanSteps = [
   "Probing for exposed sensitive files...",
   "Fingerprinting web technologies...",
   "Analyzing content for risks...",
+  "Crawling for injection candidates...",
+  "Running sqlmap against candidates...",
   "Asking AI for executive summary...",
   "Finalizing report..."
 ];
@@ -39,6 +41,8 @@ const scanSteps = [
 export default function Home() {
   const [, setLocation] = useLocation();
   const [url, setUrl] = useState("");
+  const [enableActive, setEnableActive] = useState(false);
+  const [confirmAuth, setConfirmAuth] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scanStepIndex, setScanStepIndex] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -82,16 +86,17 @@ export default function Home() {
 
     try {
       const report = await runScanMutation.mutateAsync({
-        data: { url: targetUrl }
+        data: { url: targetUrl, enableActiveTests: enableActive && confirmAuth }
       });
       setProgress(100);
       setLocation(`/scan/${report.id}`);
     } catch (error) {
       console.error("Scan failed", error);
       setIsScanning(false);
-      // In a real app we'd show a toast here
     }
   };
+
+  const activeArmed = enableActive && confirmAuth;
 
   return (
     <div className="container max-w-6xl mx-auto px-4 py-12 space-y-16">
@@ -148,25 +153,73 @@ export default function Home() {
               </CardContent>
             </Card>
           ) : (
-            <form onSubmit={handleScan} className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input 
-                  type="text" 
-                  placeholder="example.com" 
-                  className="pl-12 pr-4 py-6 text-lg bg-card/80 border-muted-foreground/20 focus-visible:ring-primary focus-visible:border-primary shadow-sm h-auto font-mono"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  disabled={isScanning}
-                />
+            <form onSubmit={handleScan} className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="example.com"
+                    className="pl-12 pr-4 py-6 text-lg bg-card/80 border-muted-foreground/20 focus-visible:ring-primary focus-visible:border-primary shadow-sm h-auto font-mono"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    disabled={isScanning}
+                  />
+                </div>
+                <Button type="submit" size="lg" disabled={!url || isScanning} className="py-6 px-8 text-lg font-semibold h-auto">
+                  <Search className="w-5 h-5 mr-2" />
+                  Run Scan
+                </Button>
               </div>
-              <Button type="submit" size="lg" disabled={!url || isScanning} className="py-6 px-8 text-lg font-semibold h-auto">
-                <Search className="w-5 h-5 mr-2" />
-                Run Scan
-              </Button>
+
+              <Card className={`bg-card/40 text-left transition-colors ${enableActive ? "border-severity-high/40" : "border-border/50"}`}>
+                <CardContent className="p-4 space-y-3">
+                  <label className="flex items-start gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="mt-1 accent-severity-high"
+                      checked={enableActive}
+                      onChange={(e) => {
+                        setEnableActive(e.target.checked);
+                        if (!e.target.checked) setConfirmAuth(false);
+                      }}
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 text-sm font-semibold">
+                        <Zap className="w-4 h-4 text-severity-high" />
+                        Enable active testing (link crawl + sqlmap)
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Crawls one level deep to gather URLs ending in <span className="font-mono">.php?…=</span> or <span className="font-mono">.aspx?…=</span> and runs sqlmap against them with low intensity (level 1, risk 1, GET-only). This sends real probe traffic to the target.
+                      </p>
+                    </div>
+                  </label>
+                  {enableActive && (
+                    <label className="flex items-start gap-3 cursor-pointer select-none border-t border-border/40 pt-3">
+                      <input
+                        type="checkbox"
+                        className="mt-1 accent-severity-high"
+                        checked={confirmAuth}
+                        onChange={(e) => setConfirmAuth(e.target.checked)}
+                      />
+                      <div className="text-xs text-muted-foreground">
+                        I confirm I own this site or have written authorization to perform active security testing against it.
+                      </div>
+                    </label>
+                  )}
+                  {enableActive && !confirmAuth && (
+                    <p className="text-xs text-severity-high font-mono">Confirm authorization above to arm active testing.</p>
+                  )}
+                  {activeArmed && (
+                    <p className="text-xs text-severity-high font-mono flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5" /> Active testing armed. Scan will take longer.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
             </form>
           )}
-          
+
           {!isScanning && (
             <p className="text-xs text-muted-foreground mt-4 font-mono text-center flex items-center justify-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5" />

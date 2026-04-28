@@ -3,7 +3,7 @@ import {
   Shield, ShieldAlert, ShieldCheck, AlertTriangle, 
   Lock, Globe, Server, Cookie, FileWarning, 
   Activity, CheckCircle2, Info, ArrowLeft,
-  Terminal, Code, ExternalLink, ShieldHalf
+  Terminal, Code, ExternalLink, ShieldHalf, Zap, XCircle
 } from "lucide-react";
 import { useGetScan, getGetScanQueryKey, Severity } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
@@ -180,6 +180,116 @@ export default function ScanReport() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Active Testing Section */}
+      {report.active.enabled && (
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.15 }}>
+          <Card className="border-severity-high/30 bg-severity-high/5 shadow-sm">
+            <CardHeader className="pb-3 border-b border-border/50">
+              <CardTitle className="flex items-center gap-2 text-severity-high">
+                <Zap className="w-5 h-5" /> Active Injection Testing
+              </CardTitle>
+              <CardDescription>
+                Crawled {report.active.crawledUrls} page{report.active.crawledUrls === 1 ? "" : "s"}, found {report.active.candidates.length} injection candidate{report.active.candidates.length === 1 ? "" : "s"}, ran sqlmap against {report.active.sqlmapResults.length}.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-5">
+              {report.active.notes.length > 0 && (
+                <div className="space-y-1">
+                  {report.active.notes.map((n, i) => (
+                    <p key={i} className="text-xs text-muted-foreground font-mono flex items-start gap-1.5">
+                      <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> {n}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              {report.active.candidates.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Injection Candidates</h3>
+                  <div className="rounded-md border overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead>URL</TableHead>
+                          <TableHead className="w-24">Kind</TableHead>
+                          <TableHead>Params</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {report.active.candidates.map((c, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="font-mono text-xs break-all max-w-[400px]">{c.url}</TableCell>
+                            <TableCell><Badge variant="outline" className="font-mono text-xs">{c.kind}</Badge></TableCell>
+                            <TableCell className="font-mono text-xs">{c.params.join(", ")}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {report.active.sqlmapResults.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">sqlmap Results</h3>
+                  <div className="rounded-md border overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead className="w-32">Verdict</TableHead>
+                          <TableHead>Target</TableHead>
+                          <TableHead>Param</TableHead>
+                          <TableHead>DBMS</TableHead>
+                          <TableHead className="w-24">Time</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {report.active.sqlmapResults.map((r, i) => (
+                          <TableRow key={i}>
+                            <TableCell>
+                              {r.vulnerable ? (
+                                <Badge variant="outline" className={severityColors.critical}>
+                                  <ShieldAlert className="w-3 h-3 mr-1" /> Vulnerable
+                                </Badge>
+                              ) : r.error ? (
+                                <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
+                                  <XCircle className="w-3 h-3 mr-1" /> {r.error}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
+                                  <CheckCircle2 className="w-3 h-3 mr-1" /> Clean
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs break-all max-w-[280px]">{r.url}</TableCell>
+                            <TableCell className="font-mono text-xs">{r.param || "—"}</TableCell>
+                            <TableCell className="font-mono text-xs">{r.dbms || "—"}</TableCell>
+                            <TableCell className="font-mono text-xs">{(r.durationMs / 1000).toFixed(1)}s</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {report.active.sqlmapResults.some(r => r.techniques.length > 0) && (
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      {report.active.sqlmapResults.filter(r => r.techniques.length > 0).map((r, i) => (
+                        <div key={i} className="font-mono">
+                          <span className="text-foreground/80">{r.url}</span> → {r.techniques.join("; ")}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {report.active.candidates.length === 0 && report.active.sqlmapResults.length === 0 && report.active.notes.length === 0 && (
+                <p className="text-sm text-muted-foreground italic">No injectable parameters discovered while crawling.</p>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Findings List */}
       <div className="space-y-6">
