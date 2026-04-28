@@ -14,3 +14,292 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Performs only safe, passive checks (HTTP headers, TLS, DNS, cookies, exposed common files, tech fingerprinting, content checks). No exploits or aggressive payloads.
+ * @summary Run a comprehensive ethical security scan against a public URL
+ */
+export const RunScanBody = zod.object({
+  url: zod
+    .string()
+    .describe(
+      "A fully qualified http(s) URL the user owns or has authorization to test.",
+    ),
+});
+
+export const RunScanResponse = zod.object({
+  id: zod.number(),
+  url: zod.string(),
+  finalUrl: zod.string(),
+  host: zod.string(),
+  scannedAt: zod.coerce.date(),
+  durationMs: zod.number(),
+  score: zod
+    .number()
+    .describe("Composite security score 0-100 (higher is safer)."),
+  grade: zod.string().describe("Letter grade A-F."),
+  statusCode: zod.number(),
+  redirectChain: zod.array(zod.string()),
+  headers: zod.array(
+    zod.object({
+      name: zod.string(),
+      present: zod.boolean(),
+      value: zod.string().nullish(),
+      severity: zod.enum(["critical", "high", "medium", "low", "info"]),
+      recommendation: zod.string(),
+    }),
+  ),
+  rawHeaders: zod.record(zod.string(), zod.string()),
+  cookies: zod.array(
+    zod.object({
+      name: zod.string(),
+      secure: zod.boolean(),
+      httpOnly: zod.boolean(),
+      sameSite: zod.string().nullish(),
+    }),
+  ),
+  tls: zod.object({
+    protocol: zod.string().nullish(),
+    cipher: zod.string().nullish(),
+    issuer: zod.string().nullish(),
+    subject: zod.string().nullish(),
+    validFrom: zod.string().nullish(),
+    validTo: zod.string().nullish(),
+    daysUntilExpiry: zod.number().nullish(),
+    san: zod.array(zod.string()),
+  }),
+  dns: zod.object({
+    a: zod.array(zod.string()),
+    aaaa: zod.array(zod.string()),
+    mx: zod.array(zod.string()),
+    ns: zod.array(zod.string()),
+    txt: zod.array(zod.string()),
+    caa: zod.array(zod.string()),
+    hasSpf: zod.boolean(),
+    hasDmarc: zod.boolean(),
+  }),
+  tech: zod.object({
+    server: zod.string().nullish(),
+    poweredBy: zod.string().nullish(),
+    framework: zod.string().nullish(),
+    cms: zod.string().nullish(),
+    analytics: zod.array(zod.string()),
+    libraries: zod.array(zod.string()),
+    cdn: zod.string().nullish(),
+  }),
+  exposedFiles: zod.array(
+    zod.object({
+      path: zod.string(),
+      status: zod.number(),
+      contentType: zod.string().nullish(),
+      size: zod.number().nullish(),
+      risk: zod.enum(["critical", "high", "medium", "low", "info"]),
+    }),
+  ),
+  content: zod.object({
+    title: zod.string().nullish(),
+    hasMixedContent: zod.boolean(),
+    externalScripts: zod.array(zod.string()),
+    formsWithoutHttps: zod.number(),
+    emailsFound: zod.array(zod.string()),
+    commentsLeaked: zod
+      .number()
+      .describe("Count of HTML comments found that may leak info."),
+  }),
+  robots: zod.object({
+    present: zod.boolean(),
+    sensitiveDisallows: zod.array(zod.string()),
+    sitemapUrls: zod.array(zod.string()),
+  }),
+  findings: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      category: zod
+        .string()
+        .describe(
+          'e.g. \"Headers\", \"TLS\", \"Cookies\", \"Exposure\", \"Content\", \"DNS\"',
+        ),
+      severity: zod.enum(["critical", "high", "medium", "low", "info"]),
+      description: zod.string(),
+      evidence: zod
+        .string()
+        .optional()
+        .describe(
+          "Short raw evidence (e.g. observed header value, file path).",
+        ),
+      recommendation: zod.string(),
+    }),
+  ),
+  aiSummary: zod
+    .string()
+    .describe("AI-generated executive summary of the scan in plain language."),
+  aiRemediation: zod
+    .array(zod.string())
+    .describe("AI-generated prioritized remediation steps."),
+});
+
+/**
+ * @summary List the most recent scans (newest first)
+ */
+export const ListRecentScansResponseItem = zod.object({
+  id: zod.number(),
+  url: zod.string(),
+  host: zod.string(),
+  scannedAt: zod.coerce.date(),
+  score: zod.number(),
+  grade: zod.string(),
+  criticalCount: zod.number(),
+  highCount: zod.number(),
+  mediumCount: zod.number(),
+  lowCount: zod.number(),
+});
+export const ListRecentScansResponse = zod.array(ListRecentScansResponseItem);
+
+/**
+ * @summary Aggregated stats across all completed scans
+ */
+export const GetScanStatsResponse = zod.object({
+  totalScans: zod.number(),
+  averageScore: zod.number(),
+  gradeDistribution: zod.array(
+    zod.object({
+      grade: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+  topIssues: zod.array(
+    zod.object({
+      title: zod.string(),
+      category: zod.string(),
+      severity: zod.enum(["critical", "high", "medium", "low", "info"]),
+      count: zod.number(),
+    }),
+  ),
+  recentSeverityCounts: zod.object({
+    critical: zod.number(),
+    high: zod.number(),
+    medium: zod.number(),
+    low: zod.number(),
+    info: zod.number(),
+  }),
+});
+
+/**
+ * @summary Get a stored scan report by id
+ */
+export const GetScanParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetScanResponse = zod.object({
+  id: zod.number(),
+  url: zod.string(),
+  finalUrl: zod.string(),
+  host: zod.string(),
+  scannedAt: zod.coerce.date(),
+  durationMs: zod.number(),
+  score: zod
+    .number()
+    .describe("Composite security score 0-100 (higher is safer)."),
+  grade: zod.string().describe("Letter grade A-F."),
+  statusCode: zod.number(),
+  redirectChain: zod.array(zod.string()),
+  headers: zod.array(
+    zod.object({
+      name: zod.string(),
+      present: zod.boolean(),
+      value: zod.string().nullish(),
+      severity: zod.enum(["critical", "high", "medium", "low", "info"]),
+      recommendation: zod.string(),
+    }),
+  ),
+  rawHeaders: zod.record(zod.string(), zod.string()),
+  cookies: zod.array(
+    zod.object({
+      name: zod.string(),
+      secure: zod.boolean(),
+      httpOnly: zod.boolean(),
+      sameSite: zod.string().nullish(),
+    }),
+  ),
+  tls: zod.object({
+    protocol: zod.string().nullish(),
+    cipher: zod.string().nullish(),
+    issuer: zod.string().nullish(),
+    subject: zod.string().nullish(),
+    validFrom: zod.string().nullish(),
+    validTo: zod.string().nullish(),
+    daysUntilExpiry: zod.number().nullish(),
+    san: zod.array(zod.string()),
+  }),
+  dns: zod.object({
+    a: zod.array(zod.string()),
+    aaaa: zod.array(zod.string()),
+    mx: zod.array(zod.string()),
+    ns: zod.array(zod.string()),
+    txt: zod.array(zod.string()),
+    caa: zod.array(zod.string()),
+    hasSpf: zod.boolean(),
+    hasDmarc: zod.boolean(),
+  }),
+  tech: zod.object({
+    server: zod.string().nullish(),
+    poweredBy: zod.string().nullish(),
+    framework: zod.string().nullish(),
+    cms: zod.string().nullish(),
+    analytics: zod.array(zod.string()),
+    libraries: zod.array(zod.string()),
+    cdn: zod.string().nullish(),
+  }),
+  exposedFiles: zod.array(
+    zod.object({
+      path: zod.string(),
+      status: zod.number(),
+      contentType: zod.string().nullish(),
+      size: zod.number().nullish(),
+      risk: zod.enum(["critical", "high", "medium", "low", "info"]),
+    }),
+  ),
+  content: zod.object({
+    title: zod.string().nullish(),
+    hasMixedContent: zod.boolean(),
+    externalScripts: zod.array(zod.string()),
+    formsWithoutHttps: zod.number(),
+    emailsFound: zod.array(zod.string()),
+    commentsLeaked: zod
+      .number()
+      .describe("Count of HTML comments found that may leak info."),
+  }),
+  robots: zod.object({
+    present: zod.boolean(),
+    sensitiveDisallows: zod.array(zod.string()),
+    sitemapUrls: zod.array(zod.string()),
+  }),
+  findings: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      category: zod
+        .string()
+        .describe(
+          'e.g. \"Headers\", \"TLS\", \"Cookies\", \"Exposure\", \"Content\", \"DNS\"',
+        ),
+      severity: zod.enum(["critical", "high", "medium", "low", "info"]),
+      description: zod.string(),
+      evidence: zod
+        .string()
+        .optional()
+        .describe(
+          "Short raw evidence (e.g. observed header value, file path).",
+        ),
+      recommendation: zod.string(),
+    }),
+  ),
+  aiSummary: zod
+    .string()
+    .describe("AI-generated executive summary of the scan in plain language."),
+  aiRemediation: zod
+    .array(zod.string())
+    .describe("AI-generated prioritized remediation steps."),
+});

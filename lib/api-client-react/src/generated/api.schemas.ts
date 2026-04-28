@@ -8,3 +8,177 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface ApiError {
+  error: string;
+}
+
+export interface ScanRequest {
+  /** A fully qualified http(s) URL the user owns or has authorization to test. */
+  url: string;
+}
+
+export type Severity = (typeof Severity)[keyof typeof Severity];
+
+export const Severity = {
+  critical: "critical",
+  high: "high",
+  medium: "medium",
+  low: "low",
+  info: "info",
+} as const;
+
+export interface Finding {
+  id: string;
+  title: string;
+  /** e.g. "Headers", "TLS", "Cookies", "Exposure", "Content", "DNS" */
+  category: string;
+  severity: Severity;
+  description: string;
+  /** Short raw evidence (e.g. observed header value, file path). */
+  evidence?: string;
+  recommendation: string;
+}
+
+export interface HeaderCheck {
+  name: string;
+  present: boolean;
+  value?: string | null;
+  severity: Severity;
+  recommendation: string;
+}
+
+export interface CookieInfo {
+  name: string;
+  secure: boolean;
+  httpOnly: boolean;
+  sameSite?: string | null;
+}
+
+export interface TlsInfo {
+  protocol?: string | null;
+  cipher?: string | null;
+  issuer?: string | null;
+  subject?: string | null;
+  validFrom?: string | null;
+  validTo?: string | null;
+  daysUntilExpiry?: number | null;
+  san: string[];
+}
+
+export interface DnsInfo {
+  a: string[];
+  aaaa: string[];
+  mx: string[];
+  ns: string[];
+  txt: string[];
+  caa: string[];
+  hasSpf: boolean;
+  hasDmarc: boolean;
+}
+
+export interface ExposedFile {
+  path: string;
+  status: number;
+  contentType?: string | null;
+  size?: number | null;
+  risk: Severity;
+}
+
+export interface TechFingerprint {
+  server?: string | null;
+  poweredBy?: string | null;
+  framework?: string | null;
+  cms?: string | null;
+  analytics: string[];
+  libraries: string[];
+  cdn?: string | null;
+}
+
+export interface ContentChecks {
+  title?: string | null;
+  hasMixedContent: boolean;
+  externalScripts: string[];
+  formsWithoutHttps: number;
+  emailsFound: string[];
+  /** Count of HTML comments found that may leak info. */
+  commentsLeaked: number;
+}
+
+export interface RobotsInfo {
+  present: boolean;
+  sensitiveDisallows: string[];
+  sitemapUrls: string[];
+}
+
+export type ScanReportRawHeaders = { [key: string]: string };
+
+export interface ScanReport {
+  id: number;
+  url: string;
+  finalUrl: string;
+  host: string;
+  scannedAt: string;
+  durationMs: number;
+  /** Composite security score 0-100 (higher is safer). */
+  score: number;
+  /** Letter grade A-F. */
+  grade: string;
+  statusCode: number;
+  redirectChain: string[];
+  headers: HeaderCheck[];
+  rawHeaders: ScanReportRawHeaders;
+  cookies: CookieInfo[];
+  tls: TlsInfo;
+  dns: DnsInfo;
+  tech: TechFingerprint;
+  exposedFiles: ExposedFile[];
+  content: ContentChecks;
+  robots: RobotsInfo;
+  findings: Finding[];
+  /** AI-generated executive summary of the scan in plain language. */
+  aiSummary: string;
+  /** AI-generated prioritized remediation steps. */
+  aiRemediation: string[];
+}
+
+export interface ScanSummary {
+  id: number;
+  url: string;
+  host: string;
+  scannedAt: string;
+  score: number;
+  grade: string;
+  criticalCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+}
+
+export type ScanStatsGradeDistributionItem = {
+  grade: string;
+  count: number;
+};
+
+export type ScanStatsTopIssuesItem = {
+  title: string;
+  category: string;
+  severity: Severity;
+  count: number;
+};
+
+export type ScanStatsRecentSeverityCounts = {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+};
+
+export interface ScanStats {
+  totalScans: number;
+  averageScore: number;
+  gradeDistribution: ScanStatsGradeDistributionItem[];
+  topIssues: ScanStatsTopIssuesItem[];
+  recentSeverityCounts: ScanStatsRecentSeverityCounts;
+}

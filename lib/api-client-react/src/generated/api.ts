@@ -5,18 +5,28 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  ApiError,
+  HealthStatus,
+  ScanReport,
+  ScanRequest,
+  ScanStats,
+  ScanSummary,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -92,6 +102,320 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Performs only safe, passive checks (HTTP headers, TLS, DNS, cookies, exposed common files, tech fingerprinting, content checks). No exploits or aggressive payloads.
+ * @summary Run a comprehensive ethical security scan against a public URL
+ */
+export const getRunScanUrl = () => {
+  return `/api/scan`;
+};
+
+export const runScan = async (
+  scanRequest: ScanRequest,
+  options?: RequestInit,
+): Promise<ScanReport> => {
+  return customFetch<ScanReport>(getRunScanUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(scanRequest),
+  });
+};
+
+export const getRunScanMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runScan>>,
+    TError,
+    { data: BodyType<ScanRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runScan>>,
+  TError,
+  { data: BodyType<ScanRequest> },
+  TContext
+> => {
+  const mutationKey = ["runScan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runScan>>,
+    { data: BodyType<ScanRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return runScan(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunScanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runScan>>
+>;
+export type RunScanMutationBody = BodyType<ScanRequest>;
+export type RunScanMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Run a comprehensive ethical security scan against a public URL
+ */
+export const useRunScan = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runScan>>,
+    TError,
+    { data: BodyType<ScanRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runScan>>,
+  TError,
+  { data: BodyType<ScanRequest> },
+  TContext
+> => {
+  return useMutation(getRunScanMutationOptions(options));
+};
+
+/**
+ * @summary List the most recent scans (newest first)
+ */
+export const getListRecentScansUrl = () => {
+  return `/api/scan/recent`;
+};
+
+export const listRecentScans = async (
+  options?: RequestInit,
+): Promise<ScanSummary[]> => {
+  return customFetch<ScanSummary[]>(getListRecentScansUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListRecentScansQueryKey = () => {
+  return [`/api/scan/recent`] as const;
+};
+
+export const getListRecentScansQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRecentScans>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listRecentScans>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListRecentScansQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listRecentScans>>> = ({
+    signal,
+  }) => listRecentScans({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRecentScans>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRecentScansQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listRecentScans>>
+>;
+export type ListRecentScansQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List the most recent scans (newest first)
+ */
+
+export function useListRecentScans<
+  TData = Awaited<ReturnType<typeof listRecentScans>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listRecentScans>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRecentScansQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Aggregated stats across all completed scans
+ */
+export const getGetScanStatsUrl = () => {
+  return `/api/scan/stats`;
+};
+
+export const getScanStats = async (
+  options?: RequestInit,
+): Promise<ScanStats> => {
+  return customFetch<ScanStats>(getGetScanStatsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetScanStatsQueryKey = () => {
+  return [`/api/scan/stats`] as const;
+};
+
+export const getGetScanStatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getScanStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getScanStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetScanStatsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getScanStats>>> = ({
+    signal,
+  }) => getScanStats({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getScanStats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetScanStatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getScanStats>>
+>;
+export type GetScanStatsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Aggregated stats across all completed scans
+ */
+
+export function useGetScanStats<
+  TData = Awaited<ReturnType<typeof getScanStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getScanStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetScanStatsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get a stored scan report by id
+ */
+export const getGetScanUrl = (id: number) => {
+  return `/api/scan/${id}`;
+};
+
+export const getScan = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ScanReport> => {
+  return customFetch<ScanReport>(getGetScanUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetScanQueryKey = (id: number) => {
+  return [`/api/scan/${id}`] as const;
+};
+
+export const getGetScanQueryOptions = <
+  TData = Awaited<ReturnType<typeof getScan>>,
+  TError = ErrorType<ApiError>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getScan>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetScanQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getScan>>> = ({
+    signal,
+  }) => getScan(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getScan>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetScanQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getScan>>
+>;
+export type GetScanQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Get a stored scan report by id
+ */
+
+export function useGetScan<
+  TData = Awaited<ReturnType<typeof getScan>>,
+  TError = ErrorType<ApiError>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getScan>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetScanQueryOptions(id, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

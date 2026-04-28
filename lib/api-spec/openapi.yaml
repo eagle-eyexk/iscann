@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: scan
+    description: Website security scanning operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,81 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /scan:
+    post:
+      operationId: runScan
+      tags: [scan]
+      summary: Run a comprehensive ethical security scan against a public URL
+      description: Performs only safe, passive checks (HTTP headers, TLS, DNS, cookies, exposed common files, tech fingerprinting, content checks). No exploits or aggressive payloads.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanRequest"
+      responses:
+        "200":
+          description: Scan report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanReport"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /scan/recent:
+    get:
+      operationId: listRecentScans
+      tags: [scan]
+      summary: List the most recent scans (newest first)
+      responses:
+        "200":
+          description: Recent scans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScanSummary"
+  /scan/stats:
+    get:
+      operationId: getScanStats
+      tags: [scan]
+      summary: Aggregated stats across all completed scans
+      responses:
+        "200":
+          description: Aggregated stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanStats"
+  /scan/{id}:
+    get:
+      operationId: getScan
+      tags: [scan]
+      summary: Get a stored scan report by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Scan report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanReport"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +110,430 @@ components:
           type: string
       required:
         - status
-
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    ScanRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          description: A fully qualified http(s) URL the user owns or has authorization to test.
+      required:
+        - url
+    Severity:
+      type: string
+      enum: [critical, high, medium, low, info]
+    Finding:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        category:
+          type: string
+          description: e.g. "Headers", "TLS", "Cookies", "Exposure", "Content", "DNS"
+        severity:
+          $ref: "#/components/schemas/Severity"
+        description:
+          type: string
+        evidence:
+          type: string
+          description: Short raw evidence (e.g. observed header value, file path).
+        recommendation:
+          type: string
+      required:
+        - id
+        - title
+        - category
+        - severity
+        - description
+        - recommendation
+    HeaderCheck:
+      type: object
+      properties:
+        name:
+          type: string
+        present:
+          type: boolean
+        value:
+          type: string
+          nullable: true
+        severity:
+          $ref: "#/components/schemas/Severity"
+        recommendation:
+          type: string
+      required:
+        - name
+        - present
+        - severity
+        - recommendation
+    CookieInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        secure:
+          type: boolean
+        httpOnly:
+          type: boolean
+        sameSite:
+          type: string
+          nullable: true
+      required:
+        - name
+        - secure
+        - httpOnly
+    TlsInfo:
+      type: object
+      properties:
+        protocol:
+          type: string
+          nullable: true
+        cipher:
+          type: string
+          nullable: true
+        issuer:
+          type: string
+          nullable: true
+        subject:
+          type: string
+          nullable: true
+        validFrom:
+          type: string
+          nullable: true
+        validTo:
+          type: string
+          nullable: true
+        daysUntilExpiry:
+          type: integer
+          nullable: true
+        san:
+          type: array
+          items:
+            type: string
+      required:
+        - san
+    DnsInfo:
+      type: object
+      properties:
+        a:
+          type: array
+          items:
+            type: string
+        aaaa:
+          type: array
+          items:
+            type: string
+        mx:
+          type: array
+          items:
+            type: string
+        ns:
+          type: array
+          items:
+            type: string
+        txt:
+          type: array
+          items:
+            type: string
+        caa:
+          type: array
+          items:
+            type: string
+        hasSpf:
+          type: boolean
+        hasDmarc:
+          type: boolean
+      required:
+        - a
+        - aaaa
+        - mx
+        - ns
+        - txt
+        - caa
+        - hasSpf
+        - hasDmarc
+    ExposedFile:
+      type: object
+      properties:
+        path:
+          type: string
+        status:
+          type: integer
+        contentType:
+          type: string
+          nullable: true
+        size:
+          type: integer
+          nullable: true
+        risk:
+          $ref: "#/components/schemas/Severity"
+      required:
+        - path
+        - status
+        - risk
+    TechFingerprint:
+      type: object
+      properties:
+        server:
+          type: string
+          nullable: true
+        poweredBy:
+          type: string
+          nullable: true
+        framework:
+          type: string
+          nullable: true
+        cms:
+          type: string
+          nullable: true
+        analytics:
+          type: array
+          items:
+            type: string
+        libraries:
+          type: array
+          items:
+            type: string
+        cdn:
+          type: string
+          nullable: true
+      required:
+        - analytics
+        - libraries
+    ContentChecks:
+      type: object
+      properties:
+        title:
+          type: string
+          nullable: true
+        hasMixedContent:
+          type: boolean
+        externalScripts:
+          type: array
+          items:
+            type: string
+        formsWithoutHttps:
+          type: integer
+        emailsFound:
+          type: array
+          items:
+            type: string
+        commentsLeaked:
+          type: integer
+          description: Count of HTML comments found that may leak info.
+      required:
+        - hasMixedContent
+        - externalScripts
+        - formsWithoutHttps
+        - emailsFound
+        - commentsLeaked
+    RobotsInfo:
+      type: object
+      properties:
+        present:
+          type: boolean
+        sensitiveDisallows:
+          type: array
+          items:
+            type: string
+        sitemapUrls:
+          type: array
+          items:
+            type: string
+      required:
+        - present
+        - sensitiveDisallows
+        - sitemapUrls
+    ScanReport:
+      type: object
+      properties:
+        id:
+          type: integer
+        url:
+          type: string
+        finalUrl:
+          type: string
+        host:
+          type: string
+        scannedAt:
+          type: string
+          format: date-time
+        durationMs:
+          type: integer
+        score:
+          type: integer
+          description: Composite security score 0-100 (higher is safer).
+        grade:
+          type: string
+          description: Letter grade A-F.
+        statusCode:
+          type: integer
+        redirectChain:
+          type: array
+          items:
+            type: string
+        headers:
+          type: array
+          items:
+            $ref: "#/components/schemas/HeaderCheck"
+        rawHeaders:
+          type: object
+          additionalProperties:
+            type: string
+        cookies:
+          type: array
+          items:
+            $ref: "#/components/schemas/CookieInfo"
+        tls:
+          $ref: "#/components/schemas/TlsInfo"
+        dns:
+          $ref: "#/components/schemas/DnsInfo"
+        tech:
+          $ref: "#/components/schemas/TechFingerprint"
+        exposedFiles:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExposedFile"
+        content:
+          $ref: "#/components/schemas/ContentChecks"
+        robots:
+          $ref: "#/components/schemas/RobotsInfo"
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Finding"
+        aiSummary:
+          type: string
+          description: AI-generated executive summary of the scan in plain language.
+        aiRemediation:
+          type: array
+          items:
+            type: string
+          description: AI-generated prioritized remediation steps.
+      required:
+        - id
+        - url
+        - finalUrl
+        - host
+        - scannedAt
+        - durationMs
+        - score
+        - grade
+        - statusCode
+        - redirectChain
+        - headers
+        - rawHeaders
+        - cookies
+        - tls
+        - dns
+        - tech
+        - exposedFiles
+        - content
+        - robots
+        - findings
+        - aiSummary
+        - aiRemediation
+    ScanSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        url:
+          type: string
+        host:
+          type: string
+        scannedAt:
+          type: string
+          format: date-time
+        score:
+          type: integer
+        grade:
+          type: string
+        criticalCount:
+          type: integer
+        highCount:
+          type: integer
+        mediumCount:
+          type: integer
+        lowCount:
+          type: integer
+      required:
+        - id
+        - url
+        - host
+        - scannedAt
+        - score
+        - grade
+        - criticalCount
+        - highCount
+        - mediumCount
+        - lowCount
+    ScanStats:
+      type: object
+      properties:
+        totalScans:
+          type: integer
+        averageScore:
+          type: integer
+        gradeDistribution:
+          type: array
+          items:
+            type: object
+            properties:
+              grade:
+                type: string
+              count:
+                type: integer
+            required:
+              - grade
+              - count
+        topIssues:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              category:
+                type: string
+              severity:
+                $ref: "#/components/schemas/Severity"
+              count:
+                type: integer
+            required:
+              - title
+              - category
+              - severity
+              - count
+        recentSeverityCounts:
+          type: object
+          properties:
+            critical:
+              type: integer
+            high:
+              type: integer
+            medium:
+              type: integer
+            low:
+              type: integer
+            info:
+              type: integer
+          required:
+            - critical
+            - high
+            - medium
+            - low
+            - info
+      required:
+        - totalScans
+        - averageScore
+        - gradeDistribution
+        - topIssues
+        - recentSeverityCounts
