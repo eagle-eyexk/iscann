@@ -1,5 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap");
+@layer theme, base, clerk, components, utilities;
 @import "tailwindcss";
+@import "@clerk/themes/shadcn.css";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
@@ -169,6 +171,15 @@
 }
 .surface-card { border: 1px solid hsl(var(--border)); background: hsl(var(--card) / .92); box-shadow: 0 8px 28px rgba(34, 92, 105, .055); }
 .text-balance { text-wrap: balance; }
+.auth-page {
+  display: flex;
+  min-height: min(760px, calc(100dvh - 160px));
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  background: radial-gradient(ellipse at 50% 10%, rgba(155, 220, 217, .22), transparent 42%);
+}
+.cl-formFieldInput::placeholder { color: #82999c; opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

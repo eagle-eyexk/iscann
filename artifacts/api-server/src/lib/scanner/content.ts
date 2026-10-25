@@ -1,4 +1,5 @@
 import type { ContentChecks, TechFingerprint, RobotsInfo, Finding } from "./types";
+import { fetchPublicUrl } from "./fetch";
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const SCRIPT_RE = /<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi;
@@ -176,15 +177,9 @@ export async function checkRobots(baseUrl: string): Promise<{
   let present = false;
   let body = "";
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 5000);
-    const res = await fetch(`${root}/robots.txt`, {
-      headers: { "User-Agent": "WhiteHatScanner/1.0" },
-      signal: ctrl.signal,
-    });
-    clearTimeout(t);
-    present = res.status === 200;
-    if (present) body = await res.text();
+    const res = await fetchPublicUrl(`${root}/robots.txt`, 5000, 256 * 1024);
+    present = res.statusCode === 200;
+    if (present) body = res.body;
   } catch {
     // ignore
   }

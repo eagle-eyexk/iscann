@@ -1,7 +1,12 @@
 import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { assetsTable } from "./assets";
 
 export const scansTable = pgTable("scans", {
   id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull().default("__legacy_unowned__"),
+  assetId: integer("asset_id").references(() => assetsTable.id, {
+    onDelete: "set null",
+  }),
   url: text("url").notNull(),
   finalUrl: text("final_url").notNull(),
   host: text("host").notNull(),

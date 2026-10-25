@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, sql } from "drizzle-orm";
-import { db, scansTable } from "@workspace/db";
+import { and, eq, desc, sql, isNull } from "drizzle-orm";
+import { assetsTable, db, scansTable } from "@workspace/db";
 import {
   RunScanBody,
   RunScanResponse,
@@ -12,8 +12,13 @@ import {
 import { runScanFor, normalizeUrl } from "../lib/scanner";
 import type { Finding, Severity } from "../lib/scanner/types";
 import type { ScanReport } from "@workspace/api-zod";
+import {
+  getAuthenticatedUserId,
+  requireAuth,
+} from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
+router.use(requireAuth);
 
 router.post("/scan", async (req, res): Promise<void> => {
   const parsed = RunScanBody.safeParse(req.body);
@@ -22,22 +27,30 @@ router.post("/scan", async (req, res): Promise<void> => {
     return;
   }
 
-  let normalized: string;
-  try {
-    normalized = normalizeUrl(parsed.data.url);
-  } catch {
-    res.status(400).json({ error: "Invalid URL." });
+  const ownerId = getAuthenticatedUserId(res);
+  const [asset] = await db
+    .select()
+    .from(assetsTable)
+    .where(
+      and(
+        eq(assetsTable.id, parsed.data.assetId),
+        eq(assetsTable.ownerId, ownerId),
+        isNull(assetsTable.archivedAt),
+      ),
+    )
+    .limit(1);
+  if (!asset || !asset.authorizationConfirmed) {
+    res.status(404).json({ error: "Authorized asset not found." });
     return;
   }
 
-  req.log.info({ url: normalized }, "Starting scan");
+  const normalized = normalizeUrl(asset.url);
+  req.log.info({ host: asset.host, assetId: asset.id }, "Starting passive scan");
 
   let report: ScanReport;
   let counts;
   try {
-    const result = await runScanFor(normalized, {
-      enableActiveTests: parsed.data.enableActiveTests === true,
-    });
+    const result = await runScanFor(normalized);
     counts = result._counts;
     const { _counts, ...rest } = result;
     report = rest;
@@ -60,6 +73,8 @@ router.post("/scan", async (req, res): Promise<void> => {
   const [row] = await db
     .insert(scansTable)
     .values({
+      ownerId,
+      assetId: asset.id,
       url: report.url,
       finalUrl: report.finalUrl,
       host: report.host,
@@ -81,6 +96,11 @@ router.post("/scan", async (req, res): Promise<void> => {
     return;
   }
 
+  await db
+    .update(assetsTable)
+    .set({ lastScannedAt: row.scannedAt })
+    .where(and(eq(assetsTable.id, asset.id), eq(assetsTable.ownerId, ownerId)));
+
   const final: ScanReport = {
     ...report,
     id: row.id,
@@ -91,6 +111,7 @@ router.post("/scan", async (req, res): Promise<void> => {
 });
 
 router.get("/scan/recent", async (_req, res): Promise<void> => {
+  const ownerId = getAuthenticatedUserId(res);
   const rows = await db
     .select({
       id: scansTable.id,
@@ -105,6 +126,7 @@ router.get("/scan/recent", async (_req, res): Promise<void> => {
       lowCount: scansTable.lowCount,
     })
     .from(scansTable)
+    .where(eq(scansTable.ownerId, ownerId))
     .orderBy(desc(scansTable.scannedAt))
     .limit(20);
 
@@ -112,9 +134,11 @@ router.get("/scan/recent", async (_req, res): Promise<void> => {
 });
 
 router.get("/scan/stats", async (_req, res): Promise<void> => {
+  const ownerId = getAuthenticatedUserId(res);
   const totalRow = await db
     .select({ total: sql<number>`count(*)::int`, avg: sql<number>`coalesce(round(avg(${scansTable.score}))::int, 0)` })
-    .from(scansTable);
+    .from(scansTable)
+    .where(eq(scansTable.ownerId, ownerId));
   const total = totalRow[0]?.total ?? 0;
   const averageScore = totalRow[0]?.avg ?? 0;
 
@@ -124,6 +148,7 @@ router.get("/scan/stats", async (_req, res): Promise<void> => {
       count: sql<number>`count(*)::int`,
     })
     .from(scansTable)
+    .where(eq(scansTable.ownerId, ownerId))
     .groupBy(scansTable.grade);
   const gradeDistribution = ["A", "B", "C", "D", "F"].map((g) => ({
     grade: g,
@@ -138,7 +163,9 @@ router.get("/scan/stats", async (_req, res): Promise<void> => {
       low: sql<number>`coalesce(sum(${scansTable.lowCount}), 0)::int`,
       info: sql<number>`coalesce(sum(${scansTable.infoCount}), 0)::int`,
     })
-    .from(scansTable);
+    .from(scansTable)
+    .where(eq(scansTable.ownerId, ownerId));
+
   const recentSeverityCounts = sevRow[0] ?? {
     critical: 0,
     high: 0,
@@ -150,6 +177,7 @@ router.get("/scan/stats", async (_req, res): Promise<void> => {
   const recentReports = await db
     .select({ report: scansTable.report })
     .from(scansTable)
+    .where(eq(scansTable.ownerId, ownerId))
     .orderBy(desc(scansTable.scannedAt))
     .limit(50);
 
@@ -195,6 +223,7 @@ router.get("/scan/stats", async (_req, res): Promise<void> => {
 });
 
 router.get("/scan/:id", async (req, res): Promise<void> => {
+  const ownerId = getAuthenticatedUserId(res);
   const params = GetScanParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -204,7 +233,7 @@ router.get("/scan/:id", async (req, res): Promise<void> => {
   const [row] = await db
     .select()
     .from(scansTable)
-    .where(eq(scansTable.id, params.data.id));
+    .where(and(eq(scansTable.id, params.data.id), eq(scansTable.ownerId, ownerId)));
 
   if (!row) {
     res.status(404).json({ error: "Scan not found" });

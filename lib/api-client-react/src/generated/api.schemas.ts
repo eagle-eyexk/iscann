@@ -14,10 +14,29 @@ export interface ApiError {
 }
 
 export interface ScanRequest {
-  /** A fully qualified http(s) URL the user owns or has authorization to test. */
+  /** ID of a website asset registered by the signed-in user after confirming authorization. */
+  assetId: number;
+}
+
+export interface CreateAssetRequest {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  name: string;
+  /** Public http(s) website URL the signed-in user owns or is authorized to assess. */
   url: string;
-  /** If true, perform ACTIVE tests (link crawling for injection candidates and sqlmap probing). Requires explicit owner authorization. Off by default. */
-  enableActiveTests?: boolean;
+  /** Must be true to record the user's authorization confirmation. */
+  authorizationConfirmed: boolean;
+}
+
+export interface Asset {
+  id: number;
+  name: string;
+  url: string;
+  host: string;
+  createdAt: string;
+  lastScannedAt: string | null;
 }
 
 export type Severity = (typeof Severity)[keyof typeof Severity];

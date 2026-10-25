@@ -12,7 +12,90 @@ tags:
     description: Health operations
   - name: scan
     description: Website security scanning operations
+  - name: assets
+    description: Authorized website assets owned by the signed-in user
 paths:
+  /assets:
+    get:
+      operationId: listAssets
+      tags: [assets]
+      summary: List the signed-in user's active assets
+      responses:
+        "200":
+          description: Authorized assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Asset"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    post:
+      operationId: createAsset
+      tags: [assets]
+      summary: Register a website the user is authorized to assess
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAssetRequest"
+      responses:
+        "201":
+          description: Authorized asset created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+        "400":
+          description: Invalid asset or authorization not confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Website already exists in the user's active assets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /assets/{id}/archive:
+    post:
+      operationId: archiveAsset
+      tags: [assets]
+      summary: Archive one of the signed-in user's assets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Asset archived
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Asset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /healthz:
     get:
       operationId: healthCheck
@@ -30,8 +113,8 @@ paths:
     post:
       operationId: runScan
       tags: [scan]
-      summary: Run a comprehensive ethical security scan against a public URL
-      description: Performs only safe, passive checks (HTTP headers, TLS, DNS, cookies, exposed common files, tech fingerprinting, content checks). No exploits or aggressive payloads.
+      summary: Queue a passive scan for one of the signed-in user's authorized assets
+      description: Creates a persistent scan job and returns immediately. The worker performs passive HTTP, TLS, DNS, cookie, and content checks only.
       requestBody:
         required: true
         content:
@@ -39,14 +122,32 @@ paths:
             schema:
               $ref: "#/components/schemas/ScanRequest"
       responses:
-        "200":
-          description: Scan report
+        "202":
+          description: Scan job queued
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ScanReport"
+                $ref: "#/components/schemas/ScanJob"
         "400":
           description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Authorized asset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: An active scan already exists for this asset
           content:
             application/json:
               schema:
@@ -77,6 +178,66 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ScanStats"
+  /scan/jobs/{id}:
+    get:
+      operationId: getScanJob
+      tags: [scan]
+      summary: Get the status of one of the signed-in user's scan jobs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Scan job status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanJob"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Scan job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /scan/jobs/{id}/cancel:
+    post:
+      operationId: cancelScanJob
+      tags: [scan]
+      summary: Cancel one of the signed-in user's active scan jobs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Current or cancelled scan job state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanJob"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Scan job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /scan/{id}:
     get:
       operationId: getScan
@@ -120,15 +281,103 @@ components:
     ScanRequest:
       type: object
       properties:
+        assetId:
+          type: integer
+          description: ID of a website asset registered by the signed-in user after confirming authorization.
+      required:
+        - assetId
+    ScanJob:
+      type: object
+      properties:
+        id:
+          type: integer
+        assetId:
+          type: integer
+        scanId:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [queued, starting, running, finalizing, completed, failed, cancelled, timed_out]
+        progress:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+        stage:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - assetId
+        - scanId
+        - status
+        - progress
+        - stage
+        - error
+        - createdAt
+        - updatedAt
+        - startedAt
+        - completedAt
+    CreateAssetRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
         url:
           type: string
-          description: A fully qualified http(s) URL the user owns or has authorization to test.
-        enableActiveTests:
+          description: Public http(s) website URL the signed-in user owns or is authorized to assess.
+        authorizationConfirmed:
           type: boolean
-          description: If true, perform ACTIVE tests (link crawling for injection candidates and sqlmap probing). Requires explicit owner authorization. Off by default.
-          default: false
+          description: Must be true to record the user's authorization confirmation.
       required:
+        - name
         - url
+        - authorizationConfirmed
+    Asset:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        url:
+          type: string
+        host:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastScannedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - name
+        - url
+        - host
+        - createdAt
+        - lastScannedAt
     Severity:
       type: string
       enum: [critical, high, medium, low, info]

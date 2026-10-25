@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 130" role="img" aria-label="iScann">
+  <defs>
+    <linearGradient id="shield" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#18d6dd"/>
+      <stop offset=".55" stop-color="#0874db"/>
+      <stop offset="1" stop-color="#082d75"/>
+    </linearGradient>
+  </defs>
+  <path d="M51 6 94 22v33c0 30-18 51-43 64C26 106 8 85 8 55V22L51 6Z" fill="url(#shield)"/>
+  <path d="M18 57c10-13 21-19 33-19s23 6 33 19c-10 13-21 19-33 19S28 70 18 57Z" fill="#071b3d"/>
+  <circle cx="51" cy="57" r="13" fill="#159ae5"/>
+  <circle cx="56" cy="52" r="4" fill="#fff"/>
+  <text x="108" y="78" fill="#102d53" font-family="DM Sans, Arial, sans-serif" font-size="61" font-weight="800" letter-spacing="-4">iScann</text>
+  <text x="111" y="105" fill="#44717f" font-family="DM Sans, Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="3">SCAN · ANALYZE · SECURE</text>
+</svg>

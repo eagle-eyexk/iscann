@@ -1,4 +1,5 @@
 import type { ExposedFile, Finding, Severity } from "./types";
+import { fetchPublicUrl } from "./fetch";
 
 interface Candidate {
   path: string;
@@ -109,36 +110,25 @@ export async function probeExposedFiles(baseUrl: string): Promise<{
     CANDIDATES.map(async (c) => {
       const url = `${root}${c.path}`;
       try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-        const res = await fetch(url, {
-          method: "GET",
-          redirect: "manual",
-          headers: {
-            "User-Agent": "WhiteHatScanner/1.0 (ethical;passive)",
-            Accept: "*/*",
-          },
-          signal: ctrl.signal,
-        });
-        clearTimeout(t);
+        const res = await fetchPublicUrl(url, TIMEOUT_MS, 0, "HEAD");
 
-        const len = Number(res.headers.get("content-length") ?? "0");
-        const ct = res.headers.get("content-type");
+        const len = Number(res.headers["content-length"] ?? "0");
+        const ct = res.headers["content-type"] ?? null;
         const isHit =
-          res.status === 200 &&
+          res.statusCode === 200 &&
           // For .well-known/security.txt: present is GOOD, so we want to report missing as info-level
           c.path !== "/.well-known/security.txt";
 
         if (c.path === "/.well-known/security.txt") {
-          if (res.status !== 200) {
-            files.push({ path: c.path, status: res.status, contentType: null, size: null, risk: c.risk });
+          if (res.statusCode !== 200) {
+            files.push({ path: c.path, status: res.statusCode, contentType: null, size: null, risk: c.risk });
             findings.push({
               id: `exposed-${c.path}`,
               title: c.title,
               category: "Exposure",
               severity: c.risk,
               description: c.description,
-              evidence: `${url} -> ${res.status}`,
+              evidence: `${url} -> ${res.statusCode}`,
               recommendation: c.recommendation,
             });
           }
@@ -148,7 +138,7 @@ export async function probeExposedFiles(baseUrl: string): Promise<{
         if (isHit) {
           files.push({
             path: c.path,
-            status: res.status,
+            status: res.statusCode,
             contentType: ct,
             size: len > 0 ? len : null,
             risk: c.risk,

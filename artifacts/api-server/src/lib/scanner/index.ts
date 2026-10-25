@@ -7,10 +7,10 @@ import { probeExposedFiles } from "./exposed";
 import { analyzeContent, fingerprintTech, checkRobots } from "./content";
 import { scoreFindings } from "./scoring";
 import { summarizeScanWithAi } from "./ai";
-import { crawlForCandidates } from "./crawler";
-import { runSqlmapBatch, locateSqlmap } from "./sqlmap";
 import type { Finding } from "./types";
 import type { ScanReport, ActiveScanReport } from "@workspace/api-zod";
+import { isPublicHost } from "./network";
+export { isPublicHost } from "./network";
 
 export function normalizeUrl(input: string): string {
   let s = input.trim();
@@ -22,28 +22,8 @@ export function normalizeUrl(input: string): string {
   return u.toString();
 }
 
-export function isPublicHost(host: string): boolean {
-  // Block obvious internal hosts
-  const lower = host.toLowerCase();
-  if (lower === "localhost" || lower.endsWith(".local") || lower.endsWith(".localhost")) {
-    return false;
-  }
-  if (/^(127\.|10\.|0\.)/.test(lower)) return false;
-  if (/^192\.168\./.test(lower)) return false;
-  if (/^169\.254\./.test(lower)) return false;
-  // 172.16/12 -> 172.16-172.31
-  const m = lower.match(/^172\.(\d{1,3})\./);
-  if (m) {
-    const octet = parseInt(m[1] ?? "0", 10);
-    if (octet >= 16 && octet <= 31) return false;
-  }
-  if (/^::1$|^fc|^fd/.test(lower)) return false;
-  return true;
-}
-
 export async function runScanFor(
   url: string,
-  options: { enableActiveTests?: boolean } = {},
 ): Promise<ScanReport & { _counts: ReturnType<typeof import("./scoring").countSeverities> }> {
   const startedAt = Date.now();
   const normalized = normalizeUrl(url);
@@ -88,38 +68,14 @@ export async function runScanFor(
   const tech = fingerprintTech(fetched.body, fetched.rawHeaders);
   findings.push(...contentFindings);
 
-  // Step 9 (optional): active testing — link gathering + sqlmap
   const active: ActiveScanReport = {
-    enabled: !!options.enableActiveTests,
+    enabled: false,
     crawledUrls: 0,
     candidates: [],
     sqlmapResults: [],
-    sqlmapAvailable: locateSqlmap() != null,
-    notes: [],
+    sqlmapAvailable: false,
+    notes: ["This assessment uses passive checks only."],
   };
-  if (options.enableActiveTests) {
-    try {
-      const { crawledUrls, candidates } = await crawlForCandidates(finalUrl);
-      active.crawledUrls = crawledUrls;
-      active.candidates = candidates;
-      if (candidates.length === 0) {
-        active.notes.push("No URLs with query parameters were discovered while crawling.");
-      } else {
-        const sqlmap = await runSqlmapBatch(candidates);
-        active.sqlmapResults = sqlmap.results;
-        active.sqlmapAvailable = sqlmap.available;
-        active.notes.push(...sqlmap.notes);
-        findings.push(...sqlmap.findings);
-        if (!sqlmap.available) {
-          active.notes.push(
-            "sqlmap is not available on this server, so candidate URLs were collected but not actively tested.",
-          );
-        }
-      }
-    } catch (err) {
-      active.notes.push(`Active scan failed: ${(err as Error).message}`);
-    }
-  }
 
   // Score
   const { score, grade } = scoreFindings(findings);

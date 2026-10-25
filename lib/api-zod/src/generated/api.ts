@@ -8,6 +8,43 @@
 import * as zod from "zod";
 
 /**
+ * @summary List the signed-in user's active assets
+ */
+export const ListAssetsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  url: zod.string(),
+  host: zod.string(),
+  createdAt: zod.coerce.date(),
+  lastScannedAt: zod.coerce.date().nullable(),
+});
+export const ListAssetsResponse = zod.array(ListAssetsResponseItem);
+
+/**
+ * @summary Register a website the user is authorized to assess
+ */
+export const createAssetBodyNameMax = 120;
+
+export const CreateAssetBody = zod.object({
+  name: zod.string().min(1).max(createAssetBodyNameMax),
+  url: zod
+    .string()
+    .describe(
+      "Public http(s) website URL the signed-in user owns or is authorized to assess.",
+    ),
+  authorizationConfirmed: zod
+    .boolean()
+    .describe("Must be true to record the user's authorization confirmation."),
+});
+
+/**
+ * @summary Archive one of the signed-in user's assets
+ */
+export const ArchiveAssetParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * Returns server health status
  * @summary Health check
  */
@@ -19,19 +56,11 @@ export const HealthCheckResponse = zod.object({
  * Performs only safe, passive checks (HTTP headers, TLS, DNS, cookies, exposed common files, tech fingerprinting, content checks). No exploits or aggressive payloads.
  * @summary Run a comprehensive ethical security scan against a public URL
  */
-export const runScanBodyEnableActiveTestsDefault = false;
-
 export const RunScanBody = zod.object({
-  url: zod
-    .string()
+  assetId: zod
+    .number()
     .describe(
-      "A fully qualified http(s) URL the user owns or has authorization to test.",
-    ),
-  enableActiveTests: zod
-    .boolean()
-    .default(runScanBodyEnableActiveTestsDefault)
-    .describe(
-      "If true, perform ACTIVE tests (link crawling for injection candidates and sqlmap probing). Requires explicit owner authorization. Off by default.",
+      "ID of a website asset registered by the signed-in user after confirming authorization.",
     ),
 });
 

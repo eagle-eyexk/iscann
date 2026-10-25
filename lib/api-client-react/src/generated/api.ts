@@ -18,6 +18,8 @@ import type {
 
 import type {
   ApiError,
+  Asset,
+  CreateAssetRequest,
   HealthStatus,
   ScanReport,
   ScanRequest,
@@ -33,6 +35,249 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * @summary List the signed-in user's active assets
+ */
+export const getListAssetsUrl = () => {
+  return `/api/assets`;
+};
+
+export const listAssets = async (options?: RequestInit): Promise<Asset[]> => {
+  return customFetch<Asset[]>(getListAssetsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAssetsQueryKey = () => {
+  return [`/api/assets`] as const;
+};
+
+export const getListAssetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAssets>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAssets>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAssetsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listAssets>>> = ({
+    signal,
+  }) => listAssets({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAssets>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAssetsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAssets>>
+>;
+export type ListAssetsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary List the signed-in user's active assets
+ */
+
+export function useListAssets<
+  TData = Awaited<ReturnType<typeof listAssets>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAssets>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAssetsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Register a website the user is authorized to assess
+ */
+export const getCreateAssetUrl = () => {
+  return `/api/assets`;
+};
+
+export const createAsset = async (
+  createAssetRequest: CreateAssetRequest,
+  options?: RequestInit,
+): Promise<Asset> => {
+  return customFetch<Asset>(getCreateAssetUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createAssetRequest),
+  });
+};
+
+export const getCreateAssetMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createAsset>>,
+    TError,
+    { data: BodyType<CreateAssetRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createAsset>>,
+  TError,
+  { data: BodyType<CreateAssetRequest> },
+  TContext
+> => {
+  const mutationKey = ["createAsset"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createAsset>>,
+    { data: BodyType<CreateAssetRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createAsset(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateAssetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createAsset>>
+>;
+export type CreateAssetMutationBody = BodyType<CreateAssetRequest>;
+export type CreateAssetMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Register a website the user is authorized to assess
+ */
+export const useCreateAsset = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createAsset>>,
+    TError,
+    { data: BodyType<CreateAssetRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createAsset>>,
+  TError,
+  { data: BodyType<CreateAssetRequest> },
+  TContext
+> => {
+  return useMutation(getCreateAssetMutationOptions(options));
+};
+
+/**
+ * @summary Archive one of the signed-in user's assets
+ */
+export const getArchiveAssetUrl = (id: number) => {
+  return `/api/assets/${id}/archive`;
+};
+
+export const archiveAsset = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getArchiveAssetUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getArchiveAssetMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof archiveAsset>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof archiveAsset>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["archiveAsset"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof archiveAsset>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return archiveAsset(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ArchiveAssetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof archiveAsset>>
+>;
+
+export type ArchiveAssetMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Archive one of the signed-in user's assets
+ */
+export const useArchiveAsset = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof archiveAsset>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof archiveAsset>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getArchiveAssetMutationOptions(options));
+};
 
 /**
  * Returns server health status

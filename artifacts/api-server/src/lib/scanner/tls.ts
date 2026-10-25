@@ -1,6 +1,8 @@
 import { connect } from "node:tls";
+import { isIP } from "node:net";
 import type { PeerCertificate } from "node:tls";
 import type { TlsInfo, Finding } from "./types";
+import { resolvePublicAddress } from "./network";
 
 export async function inspectTls(host: string, port = 443): Promise<{
   tls: TlsInfo;
@@ -18,9 +20,23 @@ export async function inspectTls(host: string, port = 443): Promise<{
     san: [],
   };
 
-  const result = await new Promise<TlsInfo>((resolve) => {
+  let destination: { address: string; family: 4 | 6 } | null = null;
+  try {
+    destination = await resolvePublicAddress(host);
+  } catch {
+    destination = null;
+  }
+
+  const result = destination
+    ? await new Promise<TlsInfo>((resolve) => {
     const socket = connect(
-      { host, port, servername: host, timeout: 8000, rejectUnauthorized: false },
+      {
+        host: destination.address,
+        port,
+        servername: isIP(host.replace(/^\[|\]$/g, "")) ? undefined : host,
+        timeout: 8000,
+        rejectUnauthorized: false,
+      },
       () => {
         try {
           const cert = socket.getPeerCertificate(true) as PeerCertificate & {
@@ -63,7 +79,8 @@ export async function inspectTls(host: string, port = 443): Promise<{
       socket.destroy();
       resolve(empty);
     });
-  });
+  })
+    : empty;
 
   if (result.protocol) {
     if (/^TLSv1(\.0|\.1)?$/i.test(result.protocol)) {

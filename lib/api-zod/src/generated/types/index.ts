@@ -8,8 +8,10 @@
 
 export * from "./activeScanReport";
 export * from "./apiError";
+export * from "./asset";
 export * from "./contentChecks";
 export * from "./cookieInfo";
+export * from "./createAssetRequest";
 export * from "./dnsInfo";
 export * from "./exposedFile";
 export * from "./finding";
