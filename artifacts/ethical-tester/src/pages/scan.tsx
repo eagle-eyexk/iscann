@@ -1,526 +1,245 @@
-import { useParams, Link } from "wouter";
-import { 
-  Shield, ShieldAlert, ShieldCheck, AlertTriangle, 
-  Lock, Globe, Server, Cookie, FileWarning, 
-  Activity, CheckCircle2, Info, ArrowLeft,
-  Terminal, Code, ExternalLink, ShieldHalf, Zap, XCircle
-} from "lucide-react";
+import { Link, useParams } from "wouter";
 import { useGetScan, getGetScanQueryKey, Severity } from "@workspace/api-client-react";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertCircle, ArrowLeft, ArrowUpRight, Check, ChevronDown, Clock3, Cookie, FileWarning, Globe2, Info, LockKeyhole, Network, RefreshCw, Server, Shield, ShieldAlert, ShieldCheck, Sparkles, Webhook } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { motion } from "framer-motion";
-import { Separator } from "@/components/ui/separator";
 
-const severityColors = {
-  critical: "bg-severity-critical/10 text-severity-critical border-severity-critical/20",
-  high: "bg-severity-high/10 text-severity-high border-severity-high/20",
-  medium: "bg-severity-medium/10 text-severity-medium border-severity-medium/20",
-  low: "bg-severity-low/10 text-severity-low border-severity-low/20",
-  info: "bg-severity-info/10 text-severity-info border-severity-info/20",
+const severityStyles: Record<Severity, string> = {
+  critical: "bg-[#fff0ee] text-[#a53c38] border-[#efc4bf]",
+  high: "bg-[#fff3ed] text-[#a64f31] border-[#efc7b3]",
+  medium: "bg-[#fff8e9] text-[#8e6825] border-[#ead9ac]",
+  low: "bg-[#eaf6f4] text-[#287477] border-[#c7e4df]",
+  info: "bg-[#f0f4f5] text-[#586e75] border-[#d6e0e2]",
 };
 
-const severityIcons = {
-  critical: <ShieldAlert className="w-5 h-5 text-severity-critical" />,
-  high: <AlertTriangle className="w-5 h-5 text-severity-high" />,
-  medium: <ShieldHalf className="w-5 h-5 text-severity-medium" />,
-  low: <Shield className="w-5 h-5 text-severity-low" />,
-  info: <Info className="w-5 h-5 text-severity-info" />,
+const severityText: Record<Severity, string> = {
+  critical: "text-[#a53c38]",
+  high: "text-[#a64f31]",
+  medium: "text-[#8e6825]",
+  low: "text-[#287477]",
+  info: "text-[#586e75]",
 };
+
+function humanDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function ScoreRing({ score, grade }: { score: number; grade: string }) {
+  const boundedScore = Math.max(0, Math.min(100, score));
+  const color = boundedScore >= 80 ? "#39816e" : boundedScore >= 60 ? "#a1823f" : "#b75e48";
+  return (
+    <div className="relative flex h-36 w-36 shrink-0 items-center justify-center rounded-full" style={{ background: `conic-gradient(${color} ${boundedScore * 3.6}deg, #e4eeeb 0deg)` }} aria-label={`Security score ${score} out of 100, grade ${grade}`}>
+      <div className="flex h-[122px] w-[122px] flex-col items-center justify-center rounded-full bg-white shadow-inner">
+        <span className="font-serif text-[2.6rem] font-extrabold leading-none tracking-tight text-[#234a55]" data-testid="text-report-score">{score}</span>
+        <span className="mt-1 text-[10px] font-bold uppercase tracking-[.18em] text-[#789095]">Score / 100</span>
+      </div>
+      <span className="absolute -right-1 top-1 flex h-10 w-10 items-center justify-center rounded-full border-4 border-white bg-[#e8f4ef] font-serif text-base font-extrabold text-[#35765e]" data-testid="text-report-grade">{grade}</span>
+    </div>
+  );
+}
+
+function DetailSection({ title, icon: Icon, count, children, initialOpen = false }: { title: string; icon: typeof Globe2; count?: string; children: React.ReactNode; initialOpen?: boolean }) {
+  return (
+    <details className="group overflow-hidden rounded-2xl border border-[#d9e7e3] bg-white shadow-[0_6px_18px_rgba(34,92,105,.035)]" open={initialOpen}>
+      <summary data-testid={`toggle-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`} className="flex cursor-pointer list-none items-center gap-3 px-4 py-4 sm:px-5 [&::-webkit-details-marker]:hidden">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#edf6f3] text-[#397e79]"><Icon className="h-4 w-4" /></span>
+        <span className="min-w-0 flex-1 font-bold text-[#294d57]">{title}</span>
+        {count && <span className="rounded-full bg-[#f1f6f5] px-2.5 py-1 text-[11px] font-semibold text-[#668187]">{count}</span>}
+        <ChevronDown className="h-4 w-4 text-[#82999c] transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="border-t border-[#eaf0ee] px-4 py-4 sm:px-5 sm:py-5">{children}</div>
+    </details>
+  );
+}
+
+function DataPills({ values, empty = "None reported" }: { values: string[]; empty?: string }) {
+  if (!values.length) return <span className="text-sm text-muted-foreground">{empty}</span>;
+  return <div className="flex flex-wrap gap-2">{values.map((value, index) => <span key={`${value}-${index}`} className="max-w-full break-all rounded-lg border border-[#dce9e6] bg-[#f5f9f8] px-2.5 py-1.5 font-mono text-xs text-[#49666d]">{value}</span>)}</div>;
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="min-w-0"><dt className="text-[10px] font-bold uppercase tracking-[.13em] text-[#809699]">{label}</dt><dd className="mt-1.5 break-words text-sm text-[#385860]">{children}</dd></div>;
+}
 
 export default function ScanReport() {
   const params = useParams();
-  const id = parseInt(params.id || "0", 10);
-
-  const { data: report, isLoading, error } = useGetScan(id, {
-    query: {
-      enabled: !!id,
-      queryKey: getGetScanQueryKey(id)
-    }
+  const id = Number(params.id || 0);
+  const validId = Number.isInteger(id) && id > 0;
+  const { data: report, isLoading, error, refetch, isFetching } = useGetScan(id, {
+    query: { enabled: validId, queryKey: getGetScanQueryKey(id) },
   });
 
   if (isLoading) {
-    return (
-      <div className="container max-w-5xl mx-auto px-4 py-8 space-y-8">
-        <Skeleton className="h-10 w-32" />
-        <div className="flex flex-col md:flex-row gap-8 items-start">
-          <Skeleton className="w-48 h-48 rounded-2xl" />
-          <div className="flex-1 space-y-4">
-            <Skeleton className="h-12 w-3/4" />
-            <Skeleton className="h-6 w-1/2" />
-            <div className="flex gap-2 pt-4">
-              <Skeleton className="h-8 w-24" />
-              <Skeleton className="h-8 w-24" />
-              <Skeleton className="h-8 w-24" />
-            </div>
-          </div>
-        </div>
-        <Skeleton className="h-64 w-full rounded-xl" />
-        <Skeleton className="h-96 w-full rounded-xl" />
-      </div>
-    );
+    return <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-7"><Skeleton className="h-8 w-40" /><Skeleton className="h-60 rounded-[26px]" /><Skeleton className="h-48 rounded-2xl" /><Skeleton className="h-80 rounded-2xl" /></div>;
   }
 
   if (error || !report) {
     return (
-      <div className="container max-w-5xl mx-auto px-4 py-24 text-center">
-        <ShieldAlert className="w-16 h-16 text-destructive mx-auto mb-6 opacity-80" />
-        <h1 className="text-3xl font-bold mb-4">Scan Not Found</h1>
-        <p className="text-muted-foreground mb-8">The requested security report could not be located or has expired.</p>
-        <Link href="/" className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2">
-          <ArrowLeft className="w-4 h-4 mr-2" /> Return Home
-        </Link>
+      <div className="mx-auto max-w-3xl px-4 py-16 text-center sm:px-7" data-testid="status-report-error">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] bg-[#fff3ed] text-[#ad684a]"><AlertCircle className="h-7 w-7" /></div>
+        <p className="mt-6 text-xs font-bold uppercase tracking-[.16em] text-[#779095]">Report unavailable</p>
+        <h1 className="mt-2 text-3xl font-extrabold text-[#244651]">We couldn’t open this assessment.</h1>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-muted-foreground">The report may have moved or there may be a temporary connection issue. Try loading it again, or return to your workspace.</p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          {validId && <Button variant="outline" onClick={() => void refetch()} disabled={isFetching} data-testid="button-retry-report"><RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />Try again</Button>}
+          <Link href="/" data-testid="link-return-home" className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"><ArrowLeft className="mr-2 h-4 w-4" />Workspace</Link>
+        </div>
       </div>
     );
   }
 
-  const gradeColors = {
-    'A': 'text-green-500 bg-green-500/10 border-green-500/20',
-    'B': 'text-blue-500 bg-blue-500/10 border-blue-500/20',
-    'C': 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20',
-    'D': 'text-orange-500 bg-orange-500/10 border-orange-500/20',
-    'F': 'text-red-500 bg-red-500/10 border-red-500/20',
-  };
-
-  const gradeColor = gradeColors[report.grade as keyof typeof gradeColors] || gradeColors['F'];
-
-  const criticalFindings = report.findings.filter(f => f.severity === 'critical');
-  const highFindings = report.findings.filter(f => f.severity === 'high');
-  const mediumFindings = report.findings.filter(f => f.severity === 'medium');
-  const lowFindings = report.findings.filter(f => f.severity === 'low');
-  const infoFindings = report.findings.filter(f => f.severity === 'info');
+  const counts = (["critical", "high", "medium", "low", "info"] as Severity[]).map((severity) => ({
+    severity,
+    count: report.findings.filter((finding) => finding.severity === severity).length,
+  }));
+  const gradeHue = report.score >= 80 ? "text-[#36745f]" : report.score >= 60 ? "text-[#8b7138]" : "text-[#a95743]";
 
   return (
-    <div className="container max-w-5xl mx-auto px-4 py-8 space-y-12">
-      <Link href="/" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
-        <ArrowLeft className="w-4 h-4 mr-1" /> Back to Dashboard
-      </Link>
+    <div className="mx-auto max-w-6xl px-4 pb-14 pt-7 sm:px-7 sm:pt-9">
+      <Link href="/" data-testid="link-back-dashboard" className="mb-6 inline-flex items-center gap-2 rounded-lg py-2 text-sm font-semibold text-[#59757b] transition-colors hover:text-primary"><ArrowLeft className="h-4 w-4" />Back to workspace</Link>
 
-      {/* Hero Section */}
-      <div className="flex flex-col md:flex-row gap-8 items-start">
-        <motion.div 
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className={`flex-shrink-0 w-48 h-48 rounded-2xl flex flex-col items-center justify-center border-2 ${gradeColor} shadow-lg`}
-        >
-          <div className="text-7xl font-bold leading-none">{report.grade}</div>
-          <div className="text-sm font-semibold tracking-widest uppercase mt-2 opacity-80">Grade</div>
-        </motion.div>
-
-        <div className="flex-1 space-y-6 pt-2">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold tracking-tight font-mono break-all">{report.host}</h1>
-              <a href={report.finalUrl} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary">
-                <ExternalLink className="w-5 h-5" />
-              </a>
+      <section className="relative overflow-hidden rounded-[26px] border border-[#d5e8e3] bg-[#eaf5f2] p-5 shadow-[0_12px_36px_rgba(37,99,103,.06)] sm:p-8">
+        <div className="soft-grid absolute inset-0 opacity-40" />
+        <div className="relative grid items-center gap-7 md:grid-cols-[auto_1fr_auto]">
+          <ScoreRing score={report.score} grade={report.grade} />
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-[#cce3dc] bg-white/70 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.14em] text-[#39766c]"><ShieldCheck className="h-3.5 w-3.5" />Completed passive assessment</div>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <h1 className="max-w-full break-all font-serif text-3xl font-extrabold tracking-[-.04em] text-[#1f4652] sm:text-4xl" data-testid="text-report-host">{report.host}</h1>
+              <a href={report.finalUrl} target="_blank" rel="noopener noreferrer" aria-label={`Open ${report.host} in a new tab`} data-testid="link-open-scanned-site" className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#cfe2de] bg-white/75 text-[#4b7778] hover:text-primary"><ArrowUpRight className="h-4 w-4" /></a>
             </div>
-            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <Activity className="w-4 h-4" /> Scanned {new Date(report.scannedAt).toLocaleString()}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Terminal className="w-4 h-4" /> Status {report.statusCode}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Activity className="w-4 h-4" /> {report.durationMs}ms duration
-              </span>
+            <p className="mt-2 break-all text-sm text-[#668187]">{report.finalUrl}</p>
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-[#5d777d]">
+              <span className="inline-flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5" />{humanDate(report.scannedAt)}</span>
+              <span className="inline-flex items-center gap-1.5"><Globe2 className="h-3.5 w-3.5" />HTTP {report.statusCode}</span>
+              <span className="inline-flex items-center gap-1.5"><ActivityIcon />{report.durationMs} ms</span>
             </div>
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline" className={`text-base py-1 px-3 ${criticalFindings.length > 0 ? severityColors.critical : 'opacity-50'}`}>
-              {criticalFindings.length} Critical
-            </Badge>
-            <Badge variant="outline" className={`text-base py-1 px-3 ${highFindings.length > 0 ? severityColors.high : 'opacity-50'}`}>
-              {highFindings.length} High
-            </Badge>
-            <Badge variant="outline" className={`text-base py-1 px-3 ${mediumFindings.length > 0 ? severityColors.medium : 'opacity-50'}`}>
-              {mediumFindings.length} Medium
-            </Badge>
-            <Badge variant="outline" className={`text-base py-1 px-3 ${lowFindings.length > 0 ? severityColors.low : 'opacity-50'}`}>
-              {lowFindings.length} Low
-            </Badge>
+          <div className="rounded-2xl border border-white/80 bg-white/70 p-4 md:min-w-[155px]">
+            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#799094]">Assessment result</p>
+            <p className={`mt-1 font-serif text-3xl font-extrabold ${gradeHue}`} data-testid="text-result-grade">{report.grade} <span className="text-lg">/ 100</span></p>
+            <p className="mt-1 text-xs text-[#678087]">{report.findings.length} reported findings</p>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* AI Summary */}
-      <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }}>
-        <Card className="border-primary/20 bg-primary/5 shadow-sm">
-          <CardHeader className="pb-3 border-b border-border/50">
-            <CardTitle className="flex items-center gap-2 text-primary">
-              <ShieldCheck className="w-5 h-5" /> Executive Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-4 space-y-6">
-            <div className="text-base leading-relaxed text-foreground/90 font-medium">
-              {report.aiSummary}
-            </div>
-            
-            {report.aiRemediation.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="font-semibold flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
-                  <Terminal className="w-4 h-4" /> Recommended Actions
-                </h3>
-                <ul className="space-y-2">
-                  {report.aiRemediation.map((step, i) => (
-                    <li key={i} className="flex gap-3 text-sm">
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold font-mono">
-                        {i + 1}
-                      </span>
-                      <span className="pt-0.5 leading-tight">{step}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </motion.div>
+      <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5" aria-label="Finding counts">
+        {counts.map(({ severity, count }) => (
+          <div key={severity} data-testid={`stat-findings-${severity}`} className="rounded-2xl border border-[#dce8e5] bg-white px-4 py-4 shadow-[0_5px_18px_rgba(34,92,105,.035)]">
+            <p className="text-xs font-semibold capitalize text-[#71898e]">{severity}</p><p className={`mt-2 font-serif text-3xl font-extrabold ${severityText[severity]}`}>{count}</p>
+          </div>
+        ))}
+      </section>
 
-      {/* Active Testing Section */}
-      {report.active.enabled && (
-        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.15 }}>
-          <Card className="border-severity-high/30 bg-severity-high/5 shadow-sm">
-            <CardHeader className="pb-3 border-b border-border/50">
-              <CardTitle className="flex items-center gap-2 text-severity-high">
-                <Zap className="w-5 h-5" /> Active Injection Testing
-              </CardTitle>
-              <CardDescription>
-                Crawled {report.active.crawledUrls} page{report.active.crawledUrls === 1 ? "" : "s"}, found {report.active.candidates.length} injection candidate{report.active.candidates.length === 1 ? "" : "s"}, ran sqlmap against {report.active.sqlmapResults.length}.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-5">
-              {report.active.notes.length > 0 && (
-                <div className="space-y-1">
-                  {report.active.notes.map((n, i) => (
-                    <p key={i} className="text-xs text-muted-foreground font-mono flex items-start gap-1.5">
-                      <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> {n}
-                    </p>
-                  ))}
-                </div>
-              )}
+      <section className="mt-9" aria-labelledby="summary-heading">
+        <div className="mb-4 flex items-center gap-2"><Sparkles className="h-5 w-5 text-[#4c8981]" /><h2 id="summary-heading" className="text-xl font-bold text-[#254a54]">Assessment summary</h2></div>
+        <div className="rounded-2xl border border-[#d3e6e1] bg-[#f2f8f6] p-5 sm:p-6" data-testid="text-ai-summary">
+          <p className="text-[15px] leading-7 text-[#36575f]">{report.aiSummary}</p>
+          {report.aiRemediation.length > 0 && <div className="mt-6 border-t border-[#dcebe7] pt-5">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-[#315b60]"><Shield className="h-4 w-4 text-[#49857d]" />Suggested next steps</h3>
+            <ol className="space-y-3">{report.aiRemediation.map((step, index) => <li key={`${index}-${step}`} className="flex gap-3 text-sm leading-6 text-[#45646b]" data-testid={`text-remediation-${index}`}><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-[#39776e]">{index + 1}</span><span>{step}</span></li>)}</ol>
+          </div>}
+        </div>
+      </section>
 
-              {report.active.candidates.length > 0 && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Injection Candidates</h3>
-                  <div className="rounded-md border overflow-hidden">
-                    <Table>
-                      <TableHeader className="bg-muted/50">
-                        <TableRow>
-                          <TableHead>URL</TableHead>
-                          <TableHead className="w-24">Kind</TableHead>
-                          <TableHead>Params</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {report.active.candidates.map((c, i) => (
-                          <TableRow key={i}>
-                            <TableCell className="font-mono text-xs break-all max-w-[400px]">{c.url}</TableCell>
-                            <TableCell><Badge variant="outline" className="font-mono text-xs">{c.kind}</Badge></TableCell>
-                            <TableCell className="font-mono text-xs">{c.params.join(", ")}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              )}
-
-              {report.active.sqlmapResults.length > 0 && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">sqlmap Results</h3>
-                  <div className="rounded-md border overflow-hidden">
-                    <Table>
-                      <TableHeader className="bg-muted/50">
-                        <TableRow>
-                          <TableHead className="w-32">Verdict</TableHead>
-                          <TableHead>Target</TableHead>
-                          <TableHead>Param</TableHead>
-                          <TableHead>DBMS</TableHead>
-                          <TableHead className="w-24">Time</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {report.active.sqlmapResults.map((r, i) => (
-                          <TableRow key={i}>
-                            <TableCell>
-                              {r.vulnerable ? (
-                                <Badge variant="outline" className={severityColors.critical}>
-                                  <ShieldAlert className="w-3 h-3 mr-1" /> Vulnerable
-                                </Badge>
-                              ) : r.error ? (
-                                <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
-                                  <XCircle className="w-3 h-3 mr-1" /> {r.error}
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
-                                  <CheckCircle2 className="w-3 h-3 mr-1" /> Clean
-                                </Badge>
-                              )}
-                            </TableCell>
-                            <TableCell className="font-mono text-xs break-all max-w-[280px]">{r.url}</TableCell>
-                            <TableCell className="font-mono text-xs">{r.param || "—"}</TableCell>
-                            <TableCell className="font-mono text-xs">{r.dbms || "—"}</TableCell>
-                            <TableCell className="font-mono text-xs">{(r.durationMs / 1000).toFixed(1)}s</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  {report.active.sqlmapResults.some(r => r.techniques.length > 0) && (
-                    <div className="text-xs text-muted-foreground space-y-1">
-                      {report.active.sqlmapResults.filter(r => r.techniques.length > 0).map((r, i) => (
-                        <div key={i} className="font-mono">
-                          <span className="text-foreground/80">{r.url}</span> → {r.techniques.join("; ")}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {report.active.candidates.length === 0 && report.active.sqlmapResults.length === 0 && report.active.notes.length === 0 && (
-                <p className="text-sm text-muted-foreground italic">No injectable parameters discovered while crawling.</p>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
-
-      {/* Findings List */}
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold flex items-center gap-2">
-          <AlertTriangle className="w-6 h-6 text-primary" /> 
-          Detailed Findings
-        </h2>
-        
+      <section className="mt-9" aria-labelledby="findings-heading">
+        <div className="mb-4 flex items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-[#789093]">What was observed</p><h2 id="findings-heading" className="mt-1 text-xl font-bold text-[#254a54]">Detailed findings</h2></div><span className="text-xs text-[#71898e]">{report.findings.length} total</span></div>
         {report.findings.length === 0 ? (
-          <Card className="bg-card/40 border-dashed">
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <CheckCircle2 className="w-8 h-8 mx-auto mb-3 text-green-500 opacity-50" />
-              <p>No significant security issues found.</p>
-            </CardContent>
-          </Card>
+          <div className="rounded-2xl border border-[#cfe4d8] bg-[#f0f8f3] px-6 py-9 text-center" data-testid="empty-findings">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#45836d]"><Check className="h-6 w-6" /></span>
+            <h3 className="mt-4 font-bold text-[#315c4d]">No findings were returned</h3>
+            <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-[#648176]">The completed assessment returned no reported findings. This reflects the available passive checks, not a guarantee that the site is free of security issues.</p>
+          </div>
         ) : (
-          <div className="space-y-4">
-            {report.findings.map((finding, idx) => (
-              <motion.div 
-                key={finding.id}
-                initial={{ y: 10, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.1 + (idx * 0.05) }}
-              >
-                <Card className="border-border/50 shadow-sm overflow-hidden">
-                  <div className={`h-1 w-full ${
-                    finding.severity === 'critical' ? 'bg-severity-critical' : 
-                    finding.severity === 'high' ? 'bg-severity-high' : 
-                    finding.severity === 'medium' ? 'bg-severity-medium' : 
-                    finding.severity === 'low' ? 'bg-severity-low' : 'bg-severity-info'
-                  }`} />
-                  <CardHeader className="pb-3 flex flex-row items-start justify-between gap-4">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        {severityIcons[finding.severity as keyof typeof severityIcons]}
-                        <CardTitle className="text-lg">{finding.title}</CardTitle>
-                      </div>
-                      <CardDescription className="flex items-center gap-2 font-mono text-xs">
-                        <Badge variant="secondary" className="rounded-sm px-1.5 py-0 font-normal">{finding.category}</Badge>
-                      </CardDescription>
-                    </div>
-                    <Badge variant="outline" className={`capitalize ${severityColors[finding.severity as keyof typeof severityColors]}`}>
-                      {finding.severity}
-                    </Badge>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <p className="text-sm text-foreground/80">{finding.description}</p>
-                    
-                    {finding.evidence && (
-                      <div className="bg-muted/50 rounded-md p-3 font-mono text-xs text-muted-foreground border border-border/50 overflow-x-auto whitespace-pre-wrap break-all">
-                        {finding.evidence}
-                      </div>
-                    )}
-                    
-                    <div className="bg-primary/5 border border-primary/10 rounded-md p-3 text-sm">
-                      <strong className="text-primary font-semibold mb-1 block">Recommendation:</strong>
-                      {finding.recommendation}
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
+          <div className="space-y-3">
+            {report.findings.map((finding) => (
+              <article key={finding.id} className="overflow-hidden rounded-2xl border border-[#dce8e5] bg-white shadow-[0_5px_18px_rgba(34,92,105,.035)]" data-testid={`card-finding-${finding.id}`}>
+                <div className={`h-1 ${finding.severity === "critical" ? "bg-[#b84645]" : finding.severity === "high" ? "bg-[#ce6947]" : finding.severity === "medium" ? "bg-[#bb8433]" : finding.severity === "low" ? "bg-[#338a96]" : "bg-[#879aa2]"}`} />
+                <div className="p-4 sm:p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex items-start gap-3"><span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#f1f6f5]"><ShieldAlert className={`h-4 w-4 ${severityText[finding.severity]}`} /></span><div><h3 className="font-bold text-[#2d4f59]">{finding.title}</h3><p className="mt-1 text-xs text-[#779095]">{finding.category}</p></div></div>
+                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold capitalize ${severityStyles[finding.severity]}`}>{finding.severity}</span>
+                  </div>
+                  <p className="mt-4 text-sm leading-6 text-[#526e74]">{finding.description}</p>
+                  {finding.evidence && <div className="mt-4 rounded-xl border border-[#e3ecea] bg-[#f6f9f8] px-3.5 py-3"><p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.12em] text-[#809598]"><Info className="h-3 w-3" />Observed evidence</p><p className="break-all font-mono text-xs leading-5 text-[#4d696f]">{finding.evidence}</p></div>}
+                  <div className="mt-4 rounded-xl bg-[#edf6f3] px-3.5 py-3 text-sm leading-6 text-[#456963]"><strong className="font-bold text-[#347268]">Recommendation</strong><p>{finding.recommendation}</p></div>
+                </div>
+              </article>
             ))}
           </div>
         )}
-      </div>
+      </section>
 
-      <Separator className="my-8" />
+      <section className="mt-10" aria-labelledby="technical-heading">
+        <div className="mb-4"><p className="text-xs font-bold uppercase tracking-[.14em] text-[#789093]">Observed response details</p><h2 id="technical-heading" className="mt-1 text-xl font-bold text-[#254a54]">Technical details</h2></div>
+        <div className="space-y-3">
+          <DetailSection title="Security response headers" icon={Globe2} count={`${report.headers.length} checks`} initialOpen>
+            <div className="space-y-2">
+              {report.headers.map((header, index) => <div key={`${header.name}-${index}`} data-testid={`row-header-${index}`} className="grid gap-2 rounded-xl border border-[#e7efed] bg-[#fbfdfc] p-3 sm:grid-cols-[minmax(150px,.7fr)_100px_minmax(0,1.6fr)] sm:items-start">
+                <span className="break-all font-mono text-xs font-semibold text-[#435f66]">{header.name}</span><span className={`inline-flex w-fit items-center gap-1 text-xs font-semibold ${header.present ? "text-[#39765e]" : "text-[#a75743]"}`}>{header.present ? <Check className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}{header.present ? "Present" : "Missing"}</span>
+                <span className="break-all text-xs leading-5 text-[#6b8388]">{header.value || (header.present ? "Value not provided" : header.recommendation || "No recommendation provided")}</span>
+              </div>)}
+              {!report.headers.length && <p className="text-sm text-muted-foreground">No header checks were included in this report.</p>}
+            </div>
+          </DetailSection>
 
-      {/* Technical Details Accordions */}
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold flex items-center gap-2">
-          <Server className="w-6 h-6 text-primary" /> 
-          Technical Details
-        </h2>
+          <DetailSection title="TLS & certificate" icon={LockKeyhole} count={report.tls.protocol || "Certificate details"}>
+            <dl className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label="Protocol">{report.tls.protocol || "Not reported"}</Field><Field label="Cipher suite">{report.tls.cipher || "Not reported"}</Field>
+              <Field label="Issuer">{report.tls.issuer || "Not reported"}</Field><Field label="Subject">{report.tls.subject || "Not reported"}</Field>
+              <Field label="Valid from">{report.tls.validFrom ? humanDate(report.tls.validFrom) : "Not reported"}</Field><Field label="Valid until">{report.tls.validTo ? humanDate(report.tls.validTo) : "Not reported"}</Field>
+              <Field label="Days until expiry">{report.tls.daysUntilExpiry ?? "Not reported"}</Field>
+            </dl>
+            <div className="mt-5"><p className="mb-2 text-[10px] font-bold uppercase tracking-[.13em] text-[#809699]">Subject alternative names</p><DataPills values={report.tls.san} /></div>
+          </DetailSection>
 
-        <Accordion type="multiple" className="space-y-4">
-          
-          {/* Headers */}
-          <AccordionItem value="headers" className="border rounded-lg bg-card px-4 shadow-sm">
-            <AccordionTrigger className="hover:no-underline py-4">
-              <div className="flex items-center gap-3">
-                <Globe className="w-5 h-5 text-muted-foreground" />
-                <span className="font-semibold text-lg">HTTP Security Headers</span>
-                <Badge variant="secondary" className="ml-2 font-mono">{report.headers.length}</Badge>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="pt-2 pb-4">
-              <div className="rounded-md border overflow-hidden">
-                <Table>
-                  <TableHeader className="bg-muted/50">
-                    <TableRow>
-                      <TableHead>Header</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Value</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {report.headers.map((h, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-mono text-xs font-medium">{h.name}</TableCell>
-                        <TableCell>
-                          {h.present ? (
-                            <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">Present</Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20">Missing</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground max-w-[300px] truncate" title={h.value || ""}>
-                          {h.value || <span className="italic opacity-50">Not set</span>}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
+          <DetailSection title="DNS records" icon={Network}>
+            <div className="grid gap-5 sm:grid-cols-2">
+              {([["A records", report.dns.a], ["AAAA records", report.dns.aaaa], ["Mail exchangers", report.dns.mx], ["Name servers", report.dns.ns], ["TXT records", report.dns.txt], ["CAA records", report.dns.caa]] as [string, string[]][]).map(([label, values]) => <div key={label}><p className="mb-2 text-[10px] font-bold uppercase tracking-[.13em] text-[#809699]">{label}</p><DataPills values={values} /></div>)}
+            </div>
+            <div className="mt-5 flex flex-wrap gap-2"><span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${report.dns.hasSpf ? "bg-[#e9f5ed] text-[#3c755d]" : "bg-[#f2f5f5] text-[#657c80]"}`}>SPF {report.dns.hasSpf ? "present" : "not detected"}</span><span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${report.dns.hasDmarc ? "bg-[#e9f5ed] text-[#3c755d]" : "bg-[#f2f5f5] text-[#657c80]"}`}>DMARC {report.dns.hasDmarc ? "present" : "not detected"}</span></div>
+          </DetailSection>
 
-          {/* TLS */}
-          <AccordionItem value="tls" className="border rounded-lg bg-card px-4 shadow-sm">
-            <AccordionTrigger className="hover:no-underline py-4">
-              <div className="flex items-center gap-3">
-                <Lock className="w-5 h-5 text-muted-foreground" />
-                <span className="font-semibold text-lg">TLS & Certificate</span>
-                {report.tls.protocol && <Badge variant="secondary" className="ml-2 font-mono">{report.tls.protocol}</Badge>}
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="pt-2 pb-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-3 bg-muted/30 p-4 rounded-lg border border-border/50">
-                  <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Certificate Info</div>
-                  <div className="grid grid-cols-[100px_1fr] gap-2 text-sm">
-                    <span className="text-muted-foreground">Issuer:</span>
-                    <span className="font-mono text-xs truncate" title={report.tls.issuer || ""}>{report.tls.issuer || "Unknown"}</span>
-                    
-                    <span className="text-muted-foreground">Subject:</span>
-                    <span className="font-mono text-xs truncate" title={report.tls.subject || ""}>{report.tls.subject || "Unknown"}</span>
-                    
-                    <span className="text-muted-foreground">Cipher:</span>
-                    <span className="font-mono text-xs">{report.tls.cipher || "Unknown"}</span>
-                  </div>
-                </div>
-                
-                <div className="space-y-3 bg-muted/30 p-4 rounded-lg border border-border/50">
-                  <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Validity</div>
-                  <div className="grid grid-cols-[100px_1fr] gap-2 text-sm">
-                    <span className="text-muted-foreground">From:</span>
-                    <span>{report.tls.validFrom ? new Date(report.tls.validFrom).toLocaleDateString() : "Unknown"}</span>
-                    
-                    <span className="text-muted-foreground">To:</span>
-                    <span>{report.tls.validTo ? new Date(report.tls.validTo).toLocaleDateString() : "Unknown"}</span>
-                    
-                    <span className="text-muted-foreground">Expires in:</span>
-                    <span className={report.tls.daysUntilExpiry && report.tls.daysUntilExpiry < 30 ? "text-orange-500 font-bold" : ""}>
-                      {report.tls.daysUntilExpiry ? `${report.tls.daysUntilExpiry} days` : "Unknown"}
-                    </span>
-                  </div>
-                </div>
+          <DetailSection title="Cookie attributes" icon={Cookie} count={`${report.cookies.length} cookies`}>
+            {report.cookies.length ? <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-left text-sm"><thead><tr className="border-b border-[#e5eeeb] text-[10px] uppercase tracking-[.12em] text-[#819598]"><th className="pb-3 pr-4 font-bold">Cookie</th><th className="pb-3 pr-4 font-bold">Secure</th><th className="pb-3 pr-4 font-bold">HttpOnly</th><th className="pb-3 font-bold">SameSite</th></tr></thead><tbody>{report.cookies.map((cookie, index) => <tr key={`${cookie.name}-${index}`} className="border-b border-[#edf2f1] last:border-0" data-testid={`row-cookie-${index}`}><td className="break-all py-3 pr-4 font-mono text-xs text-[#405e65]">{cookie.name}</td><td className="py-3 pr-4 text-xs">{cookie.secure ? "Yes" : "No"}</td><td className="py-3 pr-4 text-xs">{cookie.httpOnly ? "Yes" : "No"}</td><td className="py-3 text-xs">{cookie.sameSite || "Not set"}</td></tr>)}</tbody></table></div> : <p className="text-sm text-muted-foreground">No cookies were included in the response data.</p>}
+          </DetailSection>
 
-                <div className="col-span-1 md:col-span-2 bg-muted/30 p-4 rounded-lg border border-border/50">
-                  <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Subject Alternative Names (SAN)</div>
-                  <div className="flex flex-wrap gap-2">
-                    {report.tls.san.length > 0 ? report.tls.san.map((s, i) => (
-                      <Badge key={i} variant="secondary" className="font-mono font-normal">{s}</Badge>
-                    )) : <span className="text-sm text-muted-foreground italic">None found</span>}
-                  </div>
-                </div>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
+          <DetailSection title="Exposed files" icon={FileWarning} count={`${report.exposedFiles.length} reported`}>
+            {report.exposedFiles.length ? <div className="space-y-2">{report.exposedFiles.map((file, index) => <div key={`${file.path}-${index}`} data-testid={`row-exposed-file-${index}`} className="flex flex-wrap items-center gap-2 rounded-xl border border-[#e7efed] bg-[#fbfdfc] p-3 text-xs"><code className="min-w-0 flex-1 break-all text-[#4b666c]">{file.path}</code><span className="rounded-md bg-[#f1f6f5] px-2 py-1 text-[#607b80]">HTTP {file.status}</span><span className={`rounded-full border px-2 py-1 capitalize ${severityStyles[file.risk]}`}>{file.risk}</span>{file.contentType && <span className="w-full break-all text-[#7a9093] sm:w-auto">{file.contentType}</span>}</div>)}</div> : <p className="text-sm text-muted-foreground">No exposed files were reported.</p>}
+          </DetailSection>
 
-          {/* Tech Fingerprint */}
-          <AccordionItem value="tech" className="border rounded-lg bg-card px-4 shadow-sm">
-            <AccordionTrigger className="hover:no-underline py-4">
-              <div className="flex items-center gap-3">
-                <Code className="w-5 h-5 text-muted-foreground" />
-                <span className="font-semibold text-lg">Technology Fingerprint</span>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="pt-2 pb-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Server / CDN</div>
-                  <div className="font-mono text-sm">{report.tech.server || "Unknown"}</div>
-                  {report.tech.cdn && <div className="font-mono text-sm">{report.tech.cdn}</div>}
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Framework / CMS</div>
-                  <div className="font-mono text-sm">{report.tech.framework || "Unknown Framework"}</div>
-                  {report.tech.cms && <div className="font-mono text-sm">{report.tech.cms}</div>}
-                  {report.tech.poweredBy && <div className="font-mono text-sm text-muted-foreground text-xs">Powered by: {report.tech.poweredBy}</div>}
-                </div>
+          <DetailSection title="Content observations" icon={Webhook}>
+            <dl className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label="Page title">{report.content.title || "Not reported"}</Field><Field label="Mixed content">{report.content.hasMixedContent ? "Detected" : "Not detected"}</Field>
+              <Field label="Forms without HTTPS">{report.content.formsWithoutHttps}</Field><Field label="HTML comments flagged">{report.content.commentsLeaked}</Field>
+            </dl>
+            <div className="mt-5 grid gap-5 sm:grid-cols-2"><div><p className="mb-2 text-[10px] font-bold uppercase tracking-[.13em] text-[#809699]">External scripts</p><DataPills values={report.content.externalScripts} /></div><div><p className="mb-2 text-[10px] font-bold uppercase tracking-[.13em] text-[#809699]">Emails found</p><DataPills values={report.content.emailsFound} /></div></div>
+          </DetailSection>
 
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Libraries & Analytics</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {report.tech.libraries.map(l => <Badge key={l} variant="outline" className="font-mono text-xs py-0 h-5">{l}</Badge>)}
-                    {report.tech.analytics.map(a => <Badge key={a} variant="secondary" className="font-mono text-xs py-0 h-5">{a}</Badge>)}
-                    {report.tech.libraries.length === 0 && report.tech.analytics.length === 0 && (
-                      <span className="text-sm text-muted-foreground italic">None detected</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
+          <DetailSection title="Robots & sitemap" icon={Shield} count={report.robots.present ? "robots.txt present" : "not detected"}>
+            <div className="grid gap-5 sm:grid-cols-2"><div><p className="mb-2 text-[10px] font-bold uppercase tracking-[.13em] text-[#809699]">Sensitive disallow paths</p><DataPills values={report.robots.sensitiveDisallows} /></div><div><p className="mb-2 text-[10px] font-bold uppercase tracking-[.13em] text-[#809699]">Sitemap URLs</p><DataPills values={report.robots.sitemapUrls} /></div></div>
+          </DetailSection>
 
-          {/* Raw Headers */}
-          <AccordionItem value="raw" className="border rounded-lg bg-card px-4 shadow-sm">
-            <AccordionTrigger className="hover:no-underline py-4">
-              <div className="flex items-center gap-3">
-                <Terminal className="w-5 h-5 text-muted-foreground" />
-                <span className="font-semibold text-lg">Raw Response Headers</span>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="pt-2 pb-4">
-              <div className="bg-[#0D1117] text-[#c9d1d9] rounded-md p-4 font-mono text-sm overflow-x-auto border border-border/50">
-                {Object.entries(report.rawHeaders).map(([key, value]) => (
-                  <div key={key} className="flex whitespace-nowrap mb-1">
-                    <span className="text-[#79c0ff] min-w-[200px] inline-block">{key}:</span>
-                    <span className="text-[#a5d6ff]">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </AccordionContent>
-          </AccordionItem>
+          <DetailSection title="Technology fingerprint" icon={Server}>
+            <dl className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"><Field label="Web server">{report.tech.server || "Not detected"}</Field><Field label="CDN">{report.tech.cdn || "Not detected"}</Field><Field label="Framework">{report.tech.framework || "Not detected"}</Field><Field label="CMS">{report.tech.cms || "Not detected"}</Field><Field label="Powered by">{report.tech.poweredBy || "Not reported"}</Field></dl>
+            <div className="mt-5 grid gap-5 sm:grid-cols-2"><div><p className="mb-2 text-[10px] font-bold uppercase tracking-[.13em] text-[#809699]">Libraries</p><DataPills values={report.tech.libraries} /></div><div><p className="mb-2 text-[10px] font-bold uppercase tracking-[.13em] text-[#809699]">Analytics</p><DataPills values={report.tech.analytics} /></div></div>
+          </DetailSection>
 
-        </Accordion>
-      </div>
+          <DetailSection title="Redirect chain" icon={ArrowUpRight} count={`${report.redirectChain.length} hops`}>
+            <DataPills values={report.redirectChain} empty="No redirect chain returned." />
+          </DetailSection>
 
+          <DetailSection title="Raw response headers" icon={Webhook} count={`${Object.keys(report.rawHeaders).length} headers`}>
+            <div className="space-y-2">{Object.entries(report.rawHeaders).map(([key, value]) => <div key={key} className="grid gap-1 rounded-lg bg-[#f5f9f8] px-3 py-2 sm:grid-cols-[minmax(150px,.45fr)_1fr] sm:gap-4"><span className="break-all font-mono text-xs font-semibold text-[#4a676d]">{key}</span><span className="break-all font-mono text-xs leading-5 text-[#72888c]">{value}</span></div>)}</div>
+          </DetailSection>
+        </div>
+      </section>
+      <p className="mt-7 flex items-start gap-2 text-xs leading-5 text-[#789093]"><LockKeyhole className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#54877e]" />This report reflects the response and passive checks available at the time of assessment. Only review sites you own or are authorized to assess.</p>
     </div>
   );
+}
+
+function ActivityIcon() {
+  return <Clock3 className="h-3.5 w-3.5" />;
 }
